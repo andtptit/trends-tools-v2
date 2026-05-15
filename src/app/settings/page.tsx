@@ -6,14 +6,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Save, Info } from "lucide-react";
+import { Save, Info, Brain } from "lucide-react";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
     crawl_limit: "5",
     actor_tiktok_profile: "clockworks/tiktok-profile",
     actor_tiktok_scraper: "clockworks/tiktok-scraper",
+    base_ai_prompt: "Bạn là một chuyên gia phân tích dữ liệu mạng xã hội và nghiên cứu xu hướng (Trend Analyst). Hãy khắt khe trong việc đánh giá và đưa ra kịch bản thật viral."
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -118,13 +120,39 @@ export default function SettingsPage() {
               <p>Nếu bạn gặp lỗi "Actor with this name was not found", có thể Actor đó đã bị đổi tên hoặc xóa trên Apify Store. Bạn có thể tìm ID mới tại <a href="https://apify.com/store" target="_blank" className="underline font-bold">Apify Store</a> và cập nhật vào đây.</p>
             </div>
           </div>
-          
-          <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto flex items-center gap-2">
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Brain className="w-5 h-5 text-purple-600"/> Cấu hình Trí tuệ Nhân tạo (AI)</CardTitle>
+          <CardDescription>Thiết lập luật tối cao (Base Prompt) cho AI. Luật này sẽ áp dụng chung cho tất cả các Niche.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="base_prompt">Base System Prompt (Luật gốc cho AI)</Label>
+            <Textarea 
+              id="base_prompt" 
+              className="h-32 text-sm"
+              value={settings.base_ai_prompt} 
+              onChange={(e) => updateSetting('base_ai_prompt', e.target.value)} 
+            />
+            <p className="text-xs text-gray-500">Đoạn text này sẽ là "luật tối cao" trước khi bắt đầu phân tích. Nó sẽ tự động kết hợp với Prompt của từng Niche mà bạn đã cài trong mục Danh mục.</p>
+          </div>
+
+          <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto flex items-center gap-2 bg-purple-600 hover:bg-purple-700">
             <Save className="w-4 h-4" />
-            {saving ? 'Đang lưu...' : 'Lưu cài đặt'}
+            {saving ? 'Đang lưu...' : 'Lưu cài đặt AI'}
           </Button>
         </CardContent>
       </Card>
+
+      <div className="pt-4">
+        <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto flex items-center gap-2" variant="outline">
+          <Save className="w-4 h-4" />
+          {saving ? 'Đang lưu tất cả...' : 'Lưu tất cả cài đặt'}
+        </Button>
+      </div>
     </div>
   );
 }

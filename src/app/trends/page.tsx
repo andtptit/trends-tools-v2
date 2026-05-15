@@ -9,11 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { Users, Video, BarChart2, Lightbulb, Flame, BrainCircuit, Trash2 } from "lucide-react";
 
 export default function TrendsPage() {
   const [trends, setTrends] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTrend, setSelectedTrend] = useState<any | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const supabase = createClient();
 
   useEffect(() => {
@@ -24,13 +27,14 @@ export default function TrendsPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from('trends')
-      .select('*')
+      .select('*, categories(name)')
       .order('created_at', { ascending: false });
       
     if (error) {
       toast.error("Lỗi tải dữ liệu trends");
     } else {
       setTrends(data || []);
+      setSelectedIds(new Set());
     }
     setLoading(false);
   };
@@ -79,16 +83,83 @@ export default function TrendsPage() {
     }
   };
 
+  const handleDeleteTrend = async (id: string) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa trend này không?")) return;
+    
+    setDeletingId(id);
+    try {
+      const { error } = await supabase.from('trends').delete().eq('id', id);
+      if (error) throw error;
+      toast.success("Đã xóa trend thành công");
+      fetchTrends();
+    } catch (e) {
+      toast.error("Lỗi khi xóa trend");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteBulk = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.size} trend đã chọn?`)) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('trends')
+        .delete()
+        .in('id', Array.from(selectedIds));
+
+      if (error) throw error;
+      
+      toast.success(`Đã xóa ${selectedIds.size} trend thành công`);
+      setSelectedIds(new Set());
+      fetchTrends();
+    } catch (e: any) {
+      toast.error("Lỗi khi xóa hàng loạt: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSelection = (id: string) => {
+    const newSelection = new Set(selectedIds);
+    if (newSelection.has(id)) {
+      newSelection.delete(id);
+    } else {
+      newSelection.add(id);
+    }
+    setSelectedIds(newSelection);
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === trends.length && trends.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(trends.map(t => t.id)));
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight">Quản lý Trends</h2>
-        <div className="flex gap-2">
-            <Button onClick={handleAnalyze} variant="default" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
-            {loading ? 'Đang xử lý...' : 'Phân tích AI ngay'}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-extrabold tracking-tight text-gray-900">Quản lý Trends</h2>
+          <p className="text-sm text-gray-500">Duyệt và tối ưu các xu hướng do AI phát hiện</p>
+        </div>
+        <div className="flex gap-3">
+            {selectedIds.size > 0 && (
+                <Button onClick={handleDeleteBulk} variant="outline" className="h-10 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Xóa ({selectedIds.size})
+                </Button>
+            )}
+            <Button onClick={handleAnalyze} variant="default" disabled={loading} className="h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-100">
+               <BrainCircuit className="w-4 h-4 mr-2" />
+               {loading ? 'Đang xử lý...' : 'Phân tích AI ngay'}
             </Button>
-            <Button onClick={fetchTrends} variant="outline" disabled={loading}>
-            Làm mới
+            <Button onClick={fetchTrends} variant="outline" className="h-10" disabled={loading}>
+               Làm mới
             </Button>
         </div>
       </div>
@@ -100,7 +171,15 @@ export default function TrendsPage() {
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="bg-gray-50/50">
+                <TableHead className="w-12 text-center">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 cursor-pointer"
+                    checked={trends.length > 0 && selectedIds.size === trends.length}
+                    onChange={toggleAll}
+                  />
+                </TableHead>
                 <TableHead>Tên Trend</TableHead>
                 <TableHead>Điểm</TableHead>
                 <TableHead>Trạng thái</TableHead>
@@ -112,9 +191,24 @@ export default function TrendsPage() {
               {trends.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-6 text-gray-500">Chưa có trend nào. Hãy kích hoạt bot cào và AI.</TableCell></TableRow>
               ) : trends.map((trend) => (
-                <TableRow key={trend.id}>
+                <TableRow key={trend.id} className={selectedIds.has(trend.id) ? "bg-blue-50/50" : ""}>
+                  <TableCell className="text-center">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 cursor-pointer"
+                      checked={selectedIds.has(trend.id)}
+                      onChange={() => toggleSelection(trend.id)}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium cursor-pointer text-blue-600 hover:underline" onClick={() => setSelectedTrend(trend)}>
-                    {trend.trend_name}
+                    <div className="flex flex-col gap-1">
+                      {trend.categories ? (
+                        <span className="text-xs font-semibold text-purple-600 bg-purple-50 inline-block w-fit px-2 py-0.5 rounded">
+                          {trend.categories.name}
+                        </span>
+                      ) : null}
+                      <span>{trend.trend_name}</span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant={trend.trend_score >= 80 ? "destructive" : "secondary"}>{trend.trend_score}</Badge>
@@ -134,6 +228,14 @@ export default function TrendsPage() {
                         <Button size="sm" variant="destructive" onClick={() => updateStatus(trend.id, 'rejected')}>Bỏ qua</Button>
                       </div>
                     )}
+                    <Button 
+                        variant="destructive" 
+                        size="sm"
+                        disabled={deletingId === trend.id}
+                        onClick={() => handleDeleteTrend(trend.id)}
+                      >
+                         <Trash2 className="w-4 h-4" />
+                      </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -149,12 +251,38 @@ export default function TrendsPage() {
             <DialogTitle className="text-xl leading-tight">{selectedTrend?.trend_name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="flex gap-4 p-3 bg-purple-50 rounded-lg border border-purple-100 text-purple-900">
+                <div className="flex items-center gap-2 font-medium">
+                   <Video className="w-4 h-4 text-purple-600" />
+                   {selectedTrend?.videos_count || 1} video tham gia
+                </div>
+                <div className="flex items-center gap-2 font-medium">
+                   <Users className="w-4 h-4 text-purple-600" />
+                   {selectedTrend?.channels_count || 1} kênh lan truyền
+                </div>
+            </div>
+
             <div>
-              <h4 className="font-semibold text-gray-900 mb-1">🔥 Lý do Viral</h4>
+              <h4 className="font-semibold text-gray-900 mb-1 flex items-center gap-2"><Flame className="w-4 h-4 text-orange-500"/> Lý do Viral</h4>
               <p className="text-gray-700 bg-gray-50 p-4 rounded-md border text-sm">{selectedTrend?.viral_reason}</p>
             </div>
+
+            {selectedTrend?.channel_stats && (
             <div>
-              <h4 className="font-semibold text-gray-900 mb-1">💡 Ý tưởng Content cho KOL</h4>
+              <h4 className="font-semibold text-gray-900 mb-1 flex items-center gap-2"><BarChart2 className="w-4 h-4 text-blue-500"/> Thống kê các Kênh</h4>
+              <p className="text-gray-700 bg-blue-50/50 p-4 rounded-md border border-blue-100 text-sm whitespace-pre-wrap">{selectedTrend?.channel_stats}</p>
+            </div>
+            )}
+
+            {selectedTrend?.expert_commentary && (
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-1 flex items-center gap-2"><BrainCircuit className="w-4 h-4 text-purple-500"/> Nhận xét từ AI Chuyên gia</h4>
+              <p className="text-gray-700 bg-purple-50/50 p-4 rounded-md border border-purple-100 text-sm italic">"{selectedTrend?.expert_commentary}"</p>
+            </div>
+            )}
+
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-1 flex items-center gap-2"><Lightbulb className="w-4 h-4 text-yellow-500"/> Ý tưởng Content cho KOL</h4>
               <p className="text-gray-700 bg-gray-50 p-4 rounded-md border text-sm whitespace-pre-wrap">{selectedTrend?.content_ideas}</p>
             </div>
             <div className="flex justify-end gap-2 pt-4 border-t">

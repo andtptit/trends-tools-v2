@@ -27,6 +27,19 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Không tìm thấy Dataset ID' }, { status: 404 });
     }
 
+    // 1.5 Lấy thông tin category_id từ source_id
+    let category_id = null;
+    if (source_id) {
+        const { data: source } = await supabaseAdmin
+            .from('crawl_sources')
+            .select('category_id')
+            .eq('id', source_id)
+            .single();
+        if (source && source.category_id) {
+            category_id = source.category_id;
+        }
+    }
+
     // 2. Lấy dữ liệu (các video) từ Dataset
     const dataset = await apifyClient.dataset(run.defaultDatasetId).listItems();
     const items = dataset.items;
@@ -39,6 +52,7 @@ export async function POST(request: Request) {
     // Format JSON trả về sẽ phụ thuộc vào actor (ở đây map dựa trên clockwork/tiktok-scraper)
     const insertData = items.map((item: any) => ({
         source_id: source_id,
+        category_id: category_id,
         platform: 'tiktok',
         // Gắn fallback ID nếu thiếu url
         post_url: item.webVideoUrl || item.videoWebUrl || `https://www.tiktok.com/@${item.authorMeta?.name}/video/${item.id}`,
@@ -49,6 +63,16 @@ export async function POST(request: Request) {
         likes_count: item.diggCount || item.likes || 0,
         shares_count: item.shareCount || item.shares || 0,
         comments_count: item.commentCount || item.comments || 0,
+        
+        // Mới: Bổ sung chỉ số từ JSON mẫu
+        collect_count: item.collectCount || 0,
+        author_fans: item.authorMeta?.fans || 0,
+        author_verified: item.authorMeta?.verified || false,
+        music_id: item.musicMeta?.musicId || null,
+        music_name: item.musicMeta?.musicName || null,
+        video_duration: item.videoMeta?.duration || 0,
+        is_slideshow: item.isSlideshow || false,
+
         posted_at: item.createTimeISO || new Date().toISOString(),
         raw_json: item, // Lưu cục JSON raw để AI xử lý sau
         is_analyzed: false

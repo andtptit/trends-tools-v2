@@ -26,18 +26,27 @@ export default function SourcesPage() {
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("tiktok_profile");
   const [newUrl, setNewUrl] = useState("");
+  const [newCategoryId, setNewCategoryId] = useState("");
+
+  const [categories, setCategories] = useState<any[]>([]);
 
   const supabase = createClient();
 
   useEffect(() => {
     fetchSources();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    const { data } = await supabase.from('categories').select('*');
+    if (data) setCategories(data);
+  };
 
   const fetchSources = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('crawl_sources')
-      .select('*')
+      .select('*, categories(name)')
       .order('created_at', { ascending: false });
       
     if (error) {
@@ -73,6 +82,7 @@ export default function SourcesPage() {
     setNewName("");
     setNewType("tiktok_profile");
     setNewUrl("");
+    setNewCategoryId("");
     setIsModalOpen(true);
   }
 
@@ -81,6 +91,7 @@ export default function SourcesPage() {
     setNewName(source.name);
     setNewType(source.type);
     setNewUrl(source.url);
+    setNewCategoryId(source.category_id || "");
     setIsModalOpen(true);
   }
 
@@ -108,17 +119,24 @@ export default function SourcesPage() {
 
     setIsSubmitting(true);
     
+    const payload = {
+      name: newName, 
+      type: newType, 
+      url: newUrl,
+      category_id: newCategoryId || null
+    };
+
     let error;
     if (editingId) {
        const { error: updateError } = await supabase
         .from('crawl_sources')
-        .update({ name: newName, type: newType, url: newUrl })
+        .update(payload)
         .eq('id', editingId);
        error = updateError;
     } else {
        const { error: insertError } = await supabase
         .from('crawl_sources')
-        .insert([{ name: newName, type: newType, url: newUrl }]);
+        .insert([payload]);
        error = insertError;
     }
 
@@ -148,6 +166,7 @@ export default function SourcesPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Niche</TableHead>
                 <TableHead>Tên</TableHead>
                 <TableHead>Loại</TableHead>
                 <TableHead>URL / ID</TableHead>
@@ -160,6 +179,13 @@ export default function SourcesPage() {
                 <TableRow><TableCell colSpan={5} className="text-center py-6 text-gray-500">Chưa có nguồn nào.</TableCell></TableRow>
               ) : sources.map((source) => (
                 <TableRow key={source.id}>
+                  <TableCell>
+                     {source.categories ? (
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-100">{source.categories.name}</Badge>
+                     ) : (
+                        <span className="text-xs text-gray-400">Chưa phân loại</span>
+                     )}
+                  </TableCell>
                   <TableCell className="font-medium">{source.name}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{source.type}</Badge>
@@ -203,6 +229,20 @@ export default function SourcesPage() {
                 value={newName} 
                 onChange={(e) => setNewName(e.target.value)} 
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Danh mục Niche (Tuỳ chọn)</Label>
+              <Select value={newCategoryId} onValueChange={setNewCategoryId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn danh mục để gán trend..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">-- Không phân loại --</SelectItem>
+                  {categories.map(c => (
+                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Phân loại nguồn</Label>

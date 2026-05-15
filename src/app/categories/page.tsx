@@ -1,0 +1,228 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { Edit2, Trash2 } from "lucide-react";
+
+export default function CategoriesPage() {
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [minVideos, setMinVideos] = useState("1");
+  const [minChannels, setMinChannels] = useState("1");
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .order('created_at', { ascending: false });
+      
+    if (error) {
+      toast.error("Lỗi tải danh mục");
+    } else {
+      setCategories(data || []);
+    }
+    setLoading(false);
+  };
+
+  const openAddModal = () => {
+    setEditingId(null);
+    setName("");
+    setDescription("");
+    setCustomPrompt("Bạn là một chuyên gia phân tích dữ liệu mạng xã hội. Hãy tìm ra các xu hướng (trend) nổi bật nhất từ danh sách video sau...");
+    setMinVideos("1");
+    setMinChannels("1");
+    setIsModalOpen(true);
+  }
+
+  const openEditModal = (cat: any) => {
+    setEditingId(cat.id);
+    setName(cat.name);
+    setDescription(cat.description || "");
+    setCustomPrompt(cat.custom_prompt || "");
+    setMinVideos(cat.min_videos?.toString() || "1");
+    setMinChannels(cat.min_channels?.toString() || "1");
+    setIsModalOpen(true);
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Xoá danh mục này sẽ ảnh hưởng đến các nguồn và dữ liệu đang liên kết. Bạn có chắc chắn?")) return;
+    
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      toast.error("Lỗi khi xoá: " + error.message);
+    } else {
+      toast.success("Đã xoá danh mục");
+      fetchCategories();
+    }
+  }
+
+  const handleSave = async () => {
+    if (!name) {
+      toast.error("Vui lòng nhập tên danh mục");
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    const payload = { 
+      name, 
+      description, 
+      custom_prompt: customPrompt,
+      min_videos: parseInt(minVideos) || 1,
+      min_channels: parseInt(minChannels) || 1
+    };
+
+    let error;
+    if (editingId) {
+       const { error: updateError } = await supabase
+        .from('categories')
+        .update(payload)
+        .eq('id', editingId);
+       error = updateError;
+    } else {
+       const { error: insertError } = await supabase
+        .from('categories')
+        .insert([payload]);
+       error = insertError;
+    }
+
+    setIsSubmitting(false);
+
+    if (error) {
+      toast.error("Lỗi khi lưu: " + error.message);
+    } else {
+      toast.success(editingId ? "Đã cập nhật" : "Đã thêm mới");
+      setIsModalOpen(false);
+      fetchCategories();
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold tracking-tight">Danh mục Niche (Nhu cầu)</h2>
+        <Button onClick={openAddModal} variant="default">Thêm Niche Mới</Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Phân loại các luồng phân tích AI</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tên Niche</TableHead>
+                <TableHead>Cấu hình Trend</TableHead>
+                <TableHead>Prompt riêng</TableHead>
+                <TableHead className="text-right">Hành động</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {categories.length === 0 ? (
+                <TableRow><TableCell colSpan={4} className="text-center py-6 text-gray-500">Chưa có danh mục nào.</TableCell></TableRow>
+              ) : categories.map((cat) => (
+                <TableRow key={cat.id}>
+                  <TableCell className="font-medium">
+                    <div>{cat.name}</div>
+                    <div className="text-xs text-gray-500 font-normal">{cat.description}</div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-xs font-semibold bg-gray-100 px-2 py-1 rounded">≥ {cat.min_videos || 1} video | ≥ {cat.min_channels || 1} kênh</span>
+                  </TableCell>
+                  <TableCell>
+                    {cat.custom_prompt ? (
+                       <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Có Prompt</span>
+                    ) : (
+                       <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Mặc định</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right space-x-2">
+                     <Button size="icon" variant="outline" onClick={() => openEditModal(cat)} title="Sửa">
+                        <Edit2 className="w-4 h-4 text-blue-600" />
+                     </Button>
+                     <Button size="icon" variant="outline" onClick={() => handleDelete(cat.id)} title="Xoá">
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                     </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Sửa Niche" : "Thêm Niche mới"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Tên Niche (VD: Du học, Mỹ phẩm, KOL chung)</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Mô tả ngắn</Label>
+              <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-2">
+                 <Label>Số Video tối thiểu</Label>
+                 <Input type="number" value={minVideos} onChange={(e) => setMinVideos(e.target.value)} />
+               </div>
+               <div className="space-y-2">
+                 <Label>Số Kênh tối thiểu</Label>
+                 <Input type="number" value={minChannels} onChange={(e) => setMinChannels(e.target.value)} />
+               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Custom Prompt (Hướng dẫn AI phân tích theo phong cách riêng)</Label>
+              <Textarea 
+                value={customPrompt} 
+                onChange={(e) => setCustomPrompt(e.target.value)} 
+                className="h-32 text-sm"
+              />
+              <p className="text-xs text-gray-500">
+                Nếu bạn để trống, AI sẽ dùng Prompt mặc định. Gợi ý: Hãy thêm câu "Bạn là chuyên gia về mảng X... Hãy phân tích góc nhìn của khán giả Y...".
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2 pt-2">
+            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Hủy</Button>
+            <Button onClick={handleSave} disabled={isSubmitting}>
+              {isSubmitting ? 'Đang lưu...' : 'Lưu lại'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
