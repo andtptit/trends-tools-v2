@@ -2,15 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { BrainCircuit, ExternalLink, Filter, Users, Bookmark, Clock, Hash, Music, Play, Layers, Trash2 } from "lucide-react";
+import { BrainCircuit, ExternalLink, Filter, Users, Bookmark, Clock, Hash, Music, Play, Layers, Trash2, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 export default function RawDataPage() {
@@ -27,6 +28,9 @@ export default function RawDataPage() {
   const [filterTime, setFilterTime] = useState("all"); // all, 24h
   const [minFans, setMinFans] = useState("");
   const [minCollect, setMinCollect] = useState("");
+
+  // Detail Modal state
+  const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
   // AI Analyze Modal states
   const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false);
@@ -52,31 +56,26 @@ export default function RawDataPage() {
     setLoading(true);
     let query = supabase.from('crawled_data').select('*, categories(name)');
     
-    // Áp dụng bộ lọc Niche
     if (filterCategory !== "all") {
       query = query.eq('category_id', filterCategory);
     }
 
-    // Áp dụng bộ lọc Trạng thái
     if (filterStatus === "analyzed") {
       query = query.eq('is_analyzed', true);
     } else if (filterStatus === "unanalyzed") {
       query = query.eq('is_analyzed', false);
     }
 
-    // Áp dụng bộ lọc Thời gian
     if (filterTime === "24h") {
       const yesterday = new Date();
       yesterday.setHours(yesterday.getHours() - 24);
       query = query.gte('posted_at', yesterday.toISOString());
     }
 
-    // Áp dụng bộ lọc Fans tối thiểu
     if (minFans) {
       query = query.gte('author_fans', parseInt(minFans));
     }
 
-    // Áp dụng bộ lọc Lượt lưu tối thiểu
     if (minCollect) {
       query = query.gte('collect_count', parseInt(minCollect));
     }
@@ -89,7 +88,7 @@ export default function RawDataPage() {
       toast.error("Lỗi tải dữ liệu thô");
     } else {
       setData(rawData || []);
-      setSelectedIds(new Set()); // Reset selection when filters change
+      setSelectedIds(new Set()); 
     }
     setLoading(false);
   };
@@ -124,8 +123,6 @@ export default function RawDataPage() {
     setLoading(true);
     toast.info("Đang đồng bộ lại danh mục từ Nguồn cào...");
     try {
-      // Gọi một hàm RPC hoặc xử lý logic đồng bộ
-      // Ở đây ta làm đơn giản: Lấy tất cả bài chưa có category_id và map lại
       const { data: sources } = await supabase.from('crawl_sources').select('id, category_id');
       if (sources) {
         for (const source of sources) {
@@ -183,7 +180,6 @@ export default function RawDataPage() {
 
   const handleDeleteBulk = async () => {
     if (selectedIds.size === 0) return;
-    
     if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.size} bài đăng đã chọn?`)) return;
 
     setLoading(true);
@@ -232,7 +228,7 @@ export default function RawDataPage() {
         </div>
         <div className="flex gap-3">
             {selectedIds.size > 0 && (
-                <Button onClick={handleDeleteBulk} variant="outline" className="h-10 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+                <Button onClick={handleDeleteBulk} variant="outline" className="h-10 border-red-200 text-red-600 hover:bg-red-50">
                     <Trash2 className="w-4 h-4 mr-2" />
                     Xóa ({selectedIds.size})
                 </Button>
@@ -247,14 +243,13 @@ export default function RawDataPage() {
         </div>
       </div>
 
-      {/* BỘ LỌC PREMIUM */}
       <Card className="border-none shadow-sm bg-white overflow-hidden">
         <div className="bg-gray-50/50 px-6 py-3 border-b flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                 <Filter className="w-4 h-4 text-blue-600" />
                 Bộ lọc nâng cao
             </div>
-            <Button onClick={fetchData} variant="ghost" size="sm" className="h-8 text-gray-500 hover:text-blue-600">
+            <Button onClick={fetchData} variant="ghost" size="sm" className="h-8 text-gray-500">
               Làm mới dữ liệu
             </Button>
         </div>
@@ -263,7 +258,7 @@ export default function RawDataPage() {
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Chủ đề Niche</Label>
               <Select value={filterCategory} onValueChange={(val) => val && setFilterCategory(val)}>
-                <SelectTrigger className="bg-gray-50/50 border-gray-100 focus:ring-blue-500">
+                <SelectTrigger className="bg-gray-50/50 border-gray-100">
                   <SelectValue placeholder="Tất cả Niche" />
                 </SelectTrigger>
                 <SelectContent>
@@ -278,7 +273,7 @@ export default function RawDataPage() {
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Trạng thái</Label>
               <Select value={filterStatus} onValueChange={(val) => val && setFilterStatus(val)}>
-                <SelectTrigger className="bg-gray-50/50 border-gray-100 focus:ring-blue-500">
+                <SelectTrigger className="bg-gray-50/50 border-gray-100">
                   <SelectValue placeholder="Tất cả" />
                 </SelectTrigger>
                 <SelectContent>
@@ -292,7 +287,7 @@ export default function RawDataPage() {
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Thời gian</Label>
               <Select value={filterTime} onValueChange={(val) => val && setFilterTime(val)}>
-                <SelectTrigger className="bg-gray-50/50 border-gray-100 focus:ring-blue-500">
+                <SelectTrigger className="bg-gray-50/50 border-gray-100">
                   <SelectValue placeholder="Tất cả thời gian" />
                 </SelectTrigger>
                 <SelectContent>
@@ -303,152 +298,232 @@ export default function RawDataPage() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400 flex items-center gap-1">
-                <Users className="w-3 h-3" /> Fans tối thiểu
-              </Label>
-              <div className="relative">
-                <Input 
-                    type="number" 
-                    placeholder="1,000+"
-                    className="bg-gray-50/50 border-gray-100 focus:ring-blue-500 pl-3"
-                    value={minFans}
-                    onChange={(e) => setMinFans(e.target.value)}
-                />
-              </div>
+              <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Fans tối thiểu</Label>
+              <Input type="number" placeholder="1,000+" className="bg-gray-50/50 border-gray-100" value={minFans} onChange={(e) => setMinFans(e.target.value)} />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400 flex items-center gap-1">
-                <Bookmark className="w-3 h-3" /> Lượt Lưu tối thiểu
-              </Label>
-              <Input 
-                type="number" 
-                placeholder="50+"
-                className="bg-gray-50/50 border-gray-100 focus:ring-blue-500 pl-3"
-                value={minCollect}
-                onChange={(e) => setMinCollect(e.target.value)}
-              />
+              <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Lượt Lưu tối thiểu</Label>
+              <Input type="number" placeholder="50+" className="bg-gray-50/50 border-gray-100" value={minCollect} onChange={(e) => setMinCollect(e.target.value)} />
             </div>
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardContent className="p-0">
-          <div className="rounded-none border-none">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-                  <TableHead className="w-12 text-center px-4">
-                    <input 
-                      type="checkbox" 
-                      className="w-4 h-4 cursor-pointer"
-                      checked={data.length > 0 && selectedIds.size === data.length}
-                      onChange={toggleAll}
-                    />
-                  </TableHead>
-                  <TableHead>Trạng thái</TableHead>
-                  <TableHead>Niche</TableHead>
-                  <TableHead>Tác giả</TableHead>
-                  <TableHead className="w-1/4">Nội dung / Nhạc / Định dạng</TableHead>
-                  <TableHead className="text-right">TikTok Metrics (View ↓)</TableHead>
-                  <TableHead></TableHead>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50/50">
+                <TableHead className="w-12 text-center px-4">
+                  <input type="checkbox" className="w-4 h-4 cursor-pointer" checked={data.length > 0 && selectedIds.size === data.length} onChange={toggleAll} />
+                </TableHead>
+                <TableHead>Trạng thái</TableHead>
+                <TableHead>Niche</TableHead>
+                <TableHead>Tác giả</TableHead>
+                <TableHead className="w-1/4">Nội dung</TableHead>
+                <TableHead className="text-right">Metrics (View ↓)</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                 <TableRow><TableCell colSpan={7} className="text-center py-10">Đang tải dữ liệu...</TableCell></TableRow>
+              ) : data.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-10 text-gray-500">Không tìm thấy bài đăng nào.</TableCell></TableRow>
+              ) : data.map((item) => (
+                <TableRow key={item.id} className={cn(selectedIds.has(item.id) && "bg-purple-50/50", "hover:bg-gray-50/50 transition-colors cursor-pointer")} onClick={() => setSelectedItem(item)}>
+                  <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" className="w-4 h-4 cursor-pointer" checked={selectedIds.has(item.id)} onChange={() => toggleSelection(item.id)} />
+                  </TableCell>
+                  <TableCell>
+                    {item.is_analyzed ? (
+                       <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Đã phân tích</Badge>
+                    ) : (
+                       <Badge variant="secondary" className="text-gray-400 font-normal">Chưa xử lý</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {item.categories ? (
+                      <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded">{item.categories.name}</span>
+                    ) : <span className="text-xs text-gray-400">-</span>}
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    <div>{item.author_name}</div>
+                    <div className="text-[10px] text-gray-400 font-normal">{item.author_fans?.toLocaleString()} fans {item.author_verified && '✅'}</div>
+                  </TableCell>
+                  <TableCell>
+                     <p className="line-clamp-2 text-sm text-gray-600 mb-1">{item.text_content}</p>
+                     <div className="flex flex-wrap gap-1">
+                        {item.music_name && <span className="text-[10px] bg-blue-50 text-blue-600 px-1 rounded">🎵 {item.music_name}</span>}
+                        {item.is_slideshow && <span className="text-[10px] bg-orange-50 text-orange-600 px-1 rounded">🖼 Album</span>}
+                     </div>
+                  </TableCell>
+                  <TableCell className="text-right text-sm">
+                    <div className="font-bold">👁 {item.views_count?.toLocaleString()}</div>
+                    <div className="text-gray-500 text-[10px]">❤️ {item.likes_count?.toLocaleString()} | 💾 {item.collect_count?.toLocaleString()}</div>
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-2">
+                      <a href={item.post_url} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-full">
+                          <ExternalLink className="w-4 h-4" />
+                      </a>
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteSingle(item.id)} className="text-gray-400 hover:text-red-500 h-8 w-8">
+                          <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                   <TableRow><TableCell colSpan={7} className="text-center py-10">Đang tải dữ liệu...</TableCell></TableRow>
-                ) : data.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-10 text-gray-500">Không tìm thấy bài đăng nào phù hợp với bộ lọc.</TableCell></TableRow>
-                ) : data.map((item) => (
-                  <TableRow key={item.id} className={selectedIds.has(item.id) ? "bg-purple-50/50" : "hover:bg-gray-50/50 transition-colors"}>
-                    <TableCell className="text-center">
-                      <input 
-                        type="checkbox" 
-                        className="w-4 h-4 cursor-pointer"
-                        checked={selectedIds.has(item.id)}
-                        onChange={() => toggleSelection(item.id)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {item.is_analyzed ? (
-                         <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Đã phân tích</Badge>
-                      ) : (
-                         <Badge variant="secondary" className="text-gray-400 font-normal">Chưa xử lý</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {item.categories ? (
-                        <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded">{item.categories.name}</span>
-                      ) : (
-                        <span className="text-xs text-gray-400">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      <div>{item.author_name}</div>
-                      <div className="text-[10px] text-gray-400 font-normal">
-                        {item.author_fans?.toLocaleString()} fans {item.author_verified && '✅'}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                       <p className="line-clamp-2 text-sm text-gray-600 mb-1">{item.text_content}</p>
-                       <div className="flex flex-wrap gap-1">
-                          {item.music_name && <span className="text-[10px] bg-blue-50 text-blue-600 px-1 rounded flex items-center">🎵 {item.music_name}</span>}
-                          {item.is_slideshow && <span className="text-[10px] bg-orange-50 text-orange-600 px-1 rounded">🖼 Album</span>}
-                          {item.video_duration > 0 && <span className="text-[10px] bg-gray-100 text-gray-600 px-1 rounded">⏱ {item.video_duration}s</span>}
-                       </div>
-                    </TableCell>
-                    <TableCell className="text-right text-sm">
-                      <div className="font-bold whitespace-nowrap">👁 {item.views_count?.toLocaleString()}</div>
-                      <div className="text-gray-500 text-xs flex flex-col items-end">
-                         <span>❤️ {item.likes_count?.toLocaleString()}</span>
-                         <span className="text-blue-500">💾 {item.collect_count?.toLocaleString()} lưu</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <a href={item.post_url} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-full transition-colors">
-                            <ExternalLink className="w-4 h-4" />
-                        </a>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteSingle(item.id)} className="text-gray-400 hover:text-red-500 h-8 w-8">
-                            <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
-      {/* Modal Phân tích AI */}
+      {/* AI Modal */}
       <Dialog open={isAnalyzeModalOpen} onOpenChange={setIsAnalyzeModalOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Gửi {selectedIds.size} bài cho AI phân tích</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Phân tích {selectedIds.size} bài bài đăng</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Chọn Nhóm Niche (Để AI dùng đúng Prompt chuyên gia)</Label>
-              <select 
-                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                value={selectedCategoryId} 
-                onChange={(e) => setSelectedCategoryId(e.target.value)}
-              >
+              <Label>Chọn Nhóm Niche</Label>
+              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
                 <option value="" disabled>-- Chọn Niche --</option>
-                {categories.map(c => (
-                   <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+            <Button onClick={handleAnalyze} disabled={isAnalyzing} className="w-full bg-purple-600">{isAnalyzing ? 'Đang phân tích...' : 'Bắt đầu'}</Button>
           </div>
-          <div className="flex justify-end space-x-2 pt-2">
-            <Button variant="outline" onClick={() => setIsAnalyzeModalOpen(false)}>Hủy</Button>
-            <Button onClick={handleAnalyze} disabled={isAnalyzing} className="bg-purple-600 hover:bg-purple-700">
-              {isAnalyzing ? 'Đang phân tích...' : 'Bắt đầu phân tích'}
-            </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detail Modal - Premium UI (FIXED) */}
+      <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
+        <DialogContent className="max-w-[95vw] md:max-w-4xl max-h-[95vh] overflow-y-auto p-0 border-none shadow-2xl bg-white overflow-x-hidden">
+          <div className="relative w-full">
+            {/* Header Background */}
+            <div className="bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 h-24 md:h-32 w-full" />
+            
+            <div className="px-4 md:px-8 pb-8 -mt-10 md:-mt-12">
+              <div className="bg-white rounded-2xl md:rounded-3xl shadow-xl border border-gray-100 p-5 md:p-8">
+                {selectedItem && (
+                  <div className="space-y-6 md:space-y-10">
+                    {/* Top Info */}
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pb-6 md:pb-8 border-b border-gray-50">
+                      <div className="flex gap-4 md:gap-6">
+                        <div className="shrink-0 w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl flex items-center justify-center text-blue-600 font-black text-2xl md:text-3xl shadow-inner border border-blue-100">
+                          {selectedItem.author_name?.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                             <h3 className="font-black text-gray-900 text-xl md:text-3xl tracking-tight break-words">{selectedItem.author_name}</h3>
+                             {selectedItem.author_verified && <CheckCircle2 className="w-5 h-5 text-blue-500 fill-blue-50 shrink-0" />}
+                          </div>
+                          <p className="text-gray-500 font-bold text-sm md:text-lg break-all">@{selectedItem.author_username}</p>
+                          <div className="flex items-center gap-2 md:gap-4 mt-2 flex-wrap">
+                              <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-[10px] md:text-sm font-bold border border-blue-100 shrink-0">
+                                 <Users className="size-3 md:size-4" /> {selectedItem.author_fans?.toLocaleString()} Fans
+                              </div>
+                              <div className="flex items-center gap-1.5 bg-purple-50 text-purple-700 px-2 py-1 rounded-full text-[10px] md:text-sm font-bold border border-purple-100 shrink-0">
+                                 <Hash className="size-3 md:size-4" /> {selectedItem.categories?.name || 'Chưa phân loại'}
+                              </div>
+                          </div>
+                        </div>
+                      </div>
+                      <a 
+                        href={selectedItem.post_url} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className={cn(buttonVariants({ variant: "default" }), "w-full md:w-auto bg-black hover:bg-gray-800 text-white rounded-xl md:rounded-2xl h-12 md:h-14 px-6 md:px-8 text-sm md:text-lg font-bold shadow-lg shadow-gray-200 transition-all shrink-0")}
+                      >
+                        <ExternalLink className="w-4 h-4 md:w-5 md:h-5 mr-2 md:mr-3" /> Xem trên TikTok
+                      </a>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-10">
+                      {/* Left: Content */}
+                      <div className="lg:col-span-2 space-y-6 md:space-y-8 min-w-0">
+                        <div className="space-y-3 md:space-y-4">
+                          <h4 className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] font-black text-gray-400">Nội dung bài đăng</h4>
+                          <div className="bg-gray-50/50 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-gray-100 text-gray-700 leading-relaxed text-sm md:text-lg font-medium shadow-inner italic break-words">
+                            "{selectedItem.text_content || "(Không có nội dung chữ)"}"
+                          </div>
+                        </div>
+
+                        {selectedItem.transcript && (
+                          <div className="space-y-3 md:space-y-4 animate-in fade-in slide-in-from-top-4 duration-700">
+                             <div className="flex items-center gap-2">
+                                <h4 className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] font-black text-blue-500">Kịch bản video (Script AI)</h4>
+                                <Badge variant="outline" className="text-[8px] border-blue-200 text-blue-600 bg-blue-50">Tự động bóc tách</Badge>
+                             </div>
+                             <div className="bg-blue-50/30 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-blue-100/50 text-gray-800 leading-relaxed text-sm md:text-base font-normal shadow-sm">
+                                {selectedItem.transcript}
+                             </div>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-3 gap-2 md:gap-5">
+                           <div className="p-3 md:p-5 bg-white rounded-xl md:rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center overflow-hidden">
+                              <Music className="size-4 md:size-6 mb-2 md:mb-3 text-blue-500 shrink-0" />
+                              <div className="text-[8px] md:text-[10px] text-gray-400 uppercase font-black mb-1">Âm nhạc</div>
+                              <div className="text-[10px] md:text-xs font-black text-gray-800 break-words line-clamp-2 w-full px-1" title={selectedItem.music_name}>
+                                {selectedItem.music_name || 'Mặc định'}
+                              </div>
+                           </div>
+                           <div className="p-3 md:p-5 bg-white rounded-xl md:rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
+                              <Clock className="size-4 md:size-6 mb-2 md:mb-3 text-orange-500 shrink-0" />
+                              <div className="text-[8px] md:text-[10px] text-gray-400 uppercase font-black mb-1">Thời lượng</div>
+                              <div className="text-[10px] md:text-sm font-black text-gray-800">{selectedItem.video_duration}s</div>
+                           </div>
+                           <div className="p-3 md:p-5 bg-white rounded-xl md:rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
+                              <Play className="size-4 md:size-6 mb-2 md:mb-3 text-green-500 shrink-0" />
+                              <div className="text-[8px] md:text-[10px] text-gray-400 uppercase font-black mb-1">Định dạng</div>
+                              <div className="text-[10px] md:text-sm font-black text-gray-800">{selectedItem.is_slideshow ? 'Album' : 'Video'}</div>
+                           </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Stats */}
+                      <div className="space-y-6 md:space-y-8 min-w-0">
+                         <h4 className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] font-black text-gray-400">Chỉ số lan truyền</h4>
+                         <div className="space-y-4 md:space-y-5">
+                            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl md:rounded-3xl p-5 md:p-7 text-white shadow-xl shadow-blue-200 relative overflow-hidden">
+                                <div className="text-[10px] md:text-xs font-black text-blue-100 uppercase mb-1 md:mb-2 tracking-widest">Lượt Xem</div>
+                                <div className="text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black tabular-nums tracking-tighter break-all">
+                                    {selectedItem.views_count?.toLocaleString()}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3 md:gap-4">
+                                <div className="bg-pink-50 border border-pink-100 rounded-2xl p-4 md:p-6 overflow-hidden">
+                                    <div className="text-[8px] md:text-[10px] text-pink-400 font-black uppercase mb-1 tracking-widest">Lượt Tim</div>
+                                    <div className="text-lg md:text-2xl lg:text-3xl font-black text-pink-600 tabular-nums tracking-tighter break-all">
+                                        {selectedItem.likes_count?.toLocaleString()}
+                                    </div>
+                                </div>
+                                <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 md:p-6 overflow-hidden">
+                                    <div className="text-[8px] md:text-[10px] text-orange-400 font-black uppercase mb-1 tracking-widest">Lượt Lưu</div>
+                                    <div className="text-lg md:text-2xl lg:text-3xl font-black text-orange-600 tabular-nums tracking-tighter break-all">
+                                        {selectedItem.collect_count?.toLocaleString()}
+                                    </div>
+                                </div>
+                            </div>
+                         </div>
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 md:gap-6 pt-6 md:pt-10 border-t border-gray-50 text-gray-400">
+                       <div className="text-[8px] md:text-[10px] font-mono truncate w-full sm:w-auto">ID: {selectedItem.id}</div>
+                       <div className="flex items-center gap-4 md:gap-8 w-full sm:w-auto justify-between sm:justify-end">
+                           <div className="text-[10px] md:text-sm flex items-center gap-2 font-medium shrink-0">
+                               <Clock className="size-3 md:size-4" /> {new Date(selectedItem.created_at).toLocaleString('vi-VN')}
+                           </div>
+                           <Button variant="outline" onClick={() => setSelectedItem(null)} className="rounded-xl h-10 md:h-12 px-6 md:px-10 border-gray-200 font-bold">Đóng</Button>
+                       </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
