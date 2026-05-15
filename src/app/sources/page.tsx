@@ -232,7 +232,7 @@ export default function SourcesPage() {
             </div>
             <div className="space-y-2">
               <Label>Danh mục Niche (Tuỳ chọn)</Label>
-              <Select value={newCategoryId} onValueChange={setNewCategoryId}>
+              <Select value={newCategoryId} onValueChange={(val) => setNewCategoryId(val || "")}>
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn danh mục để gán trend..." />
                 </SelectTrigger>

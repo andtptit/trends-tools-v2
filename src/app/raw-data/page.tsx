@@ -262,7 +262,7 @@ export default function RawDataPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 items-end">
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Chủ đề Niche</Label>
-              <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <Select value={filterCategory} onValueChange={(val) => val && setFilterCategory(val)}>
                 <SelectTrigger className="bg-gray-50/50 border-gray-100 focus:ring-blue-500">
                   <SelectValue placeholder="Tất cả Niche" />
                 </SelectTrigger>
@@ -277,7 +277,7 @@ export default function RawDataPage() {
 
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Trạng thái</Label>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <Select value={filterStatus} onValueChange={(val) => val && setFilterStatus(val)}>
                 <SelectTrigger className="bg-gray-50/50 border-gray-100 focus:ring-blue-500">
                   <SelectValue placeholder="Tất cả" />
                 </SelectTrigger>
@@ -291,7 +291,7 @@ export default function RawDataPage() {
 
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Thời gian</Label>
-              <Select value={filterTime} onValueChange={setFilterTime}>
+              <Select value={filterTime} onValueChange={(val) => val && setFilterTime(val)}>
                 <SelectTrigger className="bg-gray-50/50 border-gray-100 focus:ring-blue-500">
                   <SelectValue placeholder="Tất cả thời gian" />
                 </SelectTrigger>
