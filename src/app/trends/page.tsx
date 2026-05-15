@@ -35,6 +35,25 @@ export default function TrendsPage() {
     setLoading(false);
   };
 
+  const handleAnalyze = async () => {
+    toast.info("Đang chạy AI phân tích dữ liệu mới, vui lòng đợi...");
+    setLoading(true);
+    try {
+      const res = await fetch('/api/ai/analyze', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || "Phân tích hoàn tất!");
+        fetchTrends();
+      } else {
+        toast.error(data.error || "Có lỗi khi phân tích");
+      }
+    } catch (e) {
+      toast.error("Lỗi kết nối API AI");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const updateStatus = async (id: string, newStatus: string) => {
     const { error } = await supabase
       .from('trends')
@@ -64,9 +83,14 @@ export default function TrendsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">Quản lý Trends</h2>
-        <Button onClick={fetchTrends} variant="outline" disabled={loading}>
-          {loading ? 'Đang tải...' : 'Làm mới'}
-        </Button>
+        <div className="flex gap-2">
+            <Button onClick={handleAnalyze} variant="default" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
+            {loading ? 'Đang xử lý...' : 'Phân tích AI ngay'}
+            </Button>
+            <Button onClick={fetchTrends} variant="outline" disabled={loading}>
+            Làm mới
+            </Button>
+        </div>
       </div>
 
       <Card>
