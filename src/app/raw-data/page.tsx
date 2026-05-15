@@ -37,6 +37,24 @@ export default function RawDataPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // Hàm tính thời gian đã trôi qua (Relative Time)
+  const formatRelativeTime = (dateString: string) => {
+    if (!dateString) return "Không rõ";
+    const now = new Date();
+    const posted = new Date(dateString);
+    const diffInMs = now.getTime() - posted.getTime();
+    
+    if (diffInMs < 0) return "Vừa xong"; // Đề phòng lỗi múi giờ
+
+    const diffInMins = Math.floor(diffInMs / (1000 * 60));
+    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+    if (diffInMins < 60) return `${diffInMins} phút trước`;
+    if (diffInHours < 24) return `${diffInHours} giờ trước`;
+    return `${diffInDays} ngày trước`;
+  };
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -323,14 +341,15 @@ export default function RawDataPage() {
                 <TableHead>Tác giả</TableHead>
                 <TableHead className="w-1/4">Nội dung</TableHead>
                 <TableHead className="text-right">Metrics (View ↓)</TableHead>
+                <TableHead>Thời gian</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                 <TableRow><TableCell colSpan={7} className="text-center py-10">Đang tải dữ liệu...</TableCell></TableRow>
+                 <TableRow><TableCell colSpan={8} className="text-center py-10">Đang tải dữ liệu...</TableCell></TableRow>
               ) : data.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-10 text-gray-500">Không tìm thấy bài đăng nào.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-500">Không tìm thấy bài đăng nào.</TableCell></TableRow>
               ) : data.map((item) => (
                 <TableRow key={item.id} className={cn(selectedIds.has(item.id) && "bg-purple-50/50", "hover:bg-gray-50/50 transition-colors cursor-pointer")} onClick={() => setSelectedItem(item)}>
                   <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
@@ -362,6 +381,12 @@ export default function RawDataPage() {
                   <TableCell className="text-right text-sm">
                     <div className="font-bold">👁 {item.views_count?.toLocaleString()}</div>
                     <div className="text-gray-500 text-[10px]">❤️ {item.likes_count?.toLocaleString()} | 💾 {item.collect_count?.toLocaleString()}</div>
+                  </TableCell>
+                  <TableCell className="text-xs text-gray-500 font-medium">
+                    <div className="flex flex-col">
+                      <span className="text-gray-800">{formatRelativeTime(item.posted_at)}</span>
+                      <span className="text-[9px] text-gray-400">{item.posted_at ? new Date(item.posted_at).toLocaleDateString('vi-VN') : '-'}</span>
+                    </div>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-2">
@@ -426,6 +451,9 @@ export default function RawDataPage() {
                               </div>
                               <div className="flex items-center gap-1.5 bg-purple-50 text-purple-700 px-2 py-1 rounded-full text-[10px] md:text-sm font-bold border border-purple-100 shrink-0">
                                  <Hash className="size-3 md:size-4" /> {selectedItem.categories?.name || 'Chưa phân loại'}
+                              </div>
+                              <div className="flex items-center gap-1.5 bg-orange-50 text-orange-700 px-2 py-1 rounded-full text-[10px] md:text-sm font-bold border border-orange-100 shrink-0">
+                                 <Clock className="size-3 md:size-4" /> Đăng {formatRelativeTime(selectedItem.posted_at)}
                               </div>
                           </div>
                         </div>
