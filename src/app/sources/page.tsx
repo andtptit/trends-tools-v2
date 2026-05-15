@@ -206,7 +206,7 @@ export default function SourcesPage() {
             </div>
             <div className="space-y-2">
               <Label>Phân loại nguồn</Label>
-              <Select value={newType} onValueChange={(val) => setNewType(val)}>
+              <Select value={newType} onValueChange={(val) => val && setNewType(val)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn loại nguồn" />
                 </SelectTrigger>
