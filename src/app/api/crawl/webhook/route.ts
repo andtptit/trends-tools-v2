@@ -16,6 +16,12 @@ export async function POST(request: Request) {
     
     // Chỉ xử lý nếu crawl thành công
     if (payload.eventType !== 'ACTOR.RUN.SUCCEEDED') {
+        if (source_id) {
+            await supabaseAdmin
+                .from('crawl_sources')
+                .update({ last_crawl_status: 'error' })
+                .eq('id', source_id);
+        }
         return NextResponse.json({ message: 'Bỏ qua vì event không phải là SUCCEEDED' });
     }
 
@@ -45,7 +51,13 @@ export async function POST(request: Request) {
     const items = dataset.items;
 
     if (!items || items.length === 0) {
-         return NextResponse.json({ message: 'Không cào được item nào.' });
+        if (source_id) {
+            await supabaseAdmin
+                .from('crawl_sources')
+                .update({ last_crawl_status: 'completed' })
+                .eq('id', source_id);
+        }
+        return NextResponse.json({ message: 'Không cào được item nào.' });
     }
 
     // 3. Chuẩn bị dữ liệu để insert vào Supabase
@@ -85,7 +97,21 @@ export async function POST(request: Request) {
 
     if (error) {
         console.error("Lỗi khi lưu vào DB:", error);
+        if (source_id) {
+            await supabaseAdmin
+                .from('crawl_sources')
+                .update({ last_crawl_status: 'error' })
+                .eq('id', source_id);
+        }
         return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // 5. Cập nhật trạng thái nguồn đã hoàn thành
+    if (source_id) {
+        await supabaseAdmin
+            .from('crawl_sources')
+            .update({ last_crawl_status: 'completed' })
+            .eq('id', source_id);
     }
 
     return NextResponse.json({ 

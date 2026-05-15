@@ -64,6 +64,16 @@ export async function POST(request: Request) {
         }]
     });
 
+    // 4. Cập nhật trạng thái nguồn đang chạy
+    await supabaseAdmin
+        .from('crawl_sources')
+        .update({ 
+            last_crawl_status: 'running',
+            last_crawl_at: new Date().toISOString(),
+            last_crawl_run_id: run.id
+        })
+        .eq('id', source.id);
+
     return NextResponse.json({ 
         message: 'Đã gửi lệnh cào dữ liệu đến Apify thành công!', 
         runId: run.id,

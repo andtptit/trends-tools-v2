@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Users, Video, BarChart2, Lightbulb, Flame, BrainCircuit, Trash2 } from "lucide-react";
+import { Users, Video, BarChart2, Lightbulb, Flame, BrainCircuit, Trash2, Activity } from "lucide-react";
 
 export default function TrendsPage() {
   const [trends, setTrends] = useState<any[]>([]);
@@ -17,6 +17,9 @@ export default function TrendsPage() {
   const [selectedTrend, setSelectedTrend] = useState<any | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [previewTrend, setPreviewTrend] = useState<any | null>(null);
+  const [previewContent, setPreviewContent] = useState<string>("");
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -80,6 +83,58 @@ export default function TrendsPage() {
             else toast.success("Đã gửi Telegram thành công!");
         }).catch(() => toast.error("Lỗi gọi API Telegram"));
       }
+    }
+  };
+
+  const openPreviewModal = async (trend: any) => {
+    setPreviewTrend(trend);
+    setPreviewContent("");
+    setIsPreviewLoading(true);
+    
+    try {
+      // Fetch related videos to build the full preview
+      let channelStatsText = "";
+      if (trend.related_ids && Array.isArray(trend.related_ids) && trend.related_ids.length > 0) {
+        const { data: relatedItems } = await supabase
+          .from('crawled_data')
+          .select('author_name, views_count, likes_count, posted_at, post_url')
+          .in('id', trend.related_ids);
+        
+        if (relatedItems) {
+          channelStatsText = relatedItems.map(item => {
+            const dateStr = item.posted_at ? format(new Date(item.posted_at), 'dd/MM') : '??';
+            return `• <b>${item.author_name}</b>: ${item.views_count?.toLocaleString()} view | ${item.likes_count?.toLocaleString()} tim | ${dateStr}\n  👉 <a href="${item.post_url}">Xem clip</a>`;
+          }).join('\n');
+        }
+      } else {
+        channelStatsText = `• <b>${trend.crawled_data?.author_name || 'N/A'}</b>: ${trend.crawled_data?.views_count?.toLocaleString()} view\n  👉 <a href="${trend.crawled_data?.post_url}">Xem clip</a>`;
+      }
+
+      const fixNL = (text: string) => text ? text.replace(/\\n/g, '\n') : '';
+
+      const content = `🔥 <b>XU HƯỚNG MỚI: ${trend.trend_name}</b>
+⚡️ Độ hot: ${trend.trend_score}/100
+
+📊 <b>THỐNG KÊ 24H QUA:</b>
+- Số video tham gia: ${trend.videos_count || 1} video
+- Số kênh lan truyền: ${trend.channels_count || 1} kênh
+- Chi tiết nguồn tham khảo:
+${channelStatsText}
+
+💡 <b>LÝ DO VIRAL:</b>
+${fixNL(trend.viral_reason)}
+
+🧐 <b>NHẬN XÉT TỪ AI CHUYÊN GIA:</b>
+${fixNL(trend.expert_commentary)}
+
+🎯 <b>KỊCH BẢN CHO KOL:</b>
+${fixNL(trend.content_ideas)}`;
+
+      setPreviewContent(content);
+    } catch (e) {
+      toast.error("Lỗi khi tải bản xem trước");
+    } finally {
+      setIsPreviewLoading(false);
     }
   };
 
@@ -168,11 +223,12 @@ export default function TrendsPage() {
         <CardHeader>
           <CardTitle>Danh sách Trends do AI phát hiện</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50/50">
-                <TableHead className="w-12 text-center">
+        <CardContent className="p-0">
+          <div className="rounded-none border-none">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                  <TableHead className="w-12 text-center px-4">
                   <input 
                     type="checkbox" 
                     className="w-4 h-4 cursor-pointer"
@@ -221,26 +277,30 @@ export default function TrendsPage() {
                   <TableCell className="text-gray-500">
                     {format(new Date(trend.created_at), 'dd/MM/yyyy HH:mm')}
                   </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    {trend.status === 'pending' && (
-                      <div className="flex justify-end gap-2">
-                        <Button size="sm" variant="default" onClick={() => updateStatus(trend.id, 'approved')}>Duyệt</Button>
-                        <Button size="sm" variant="destructive" onClick={() => updateStatus(trend.id, 'rejected')}>Bỏ qua</Button>
-                      </div>
-                    )}
-                    <Button 
-                        variant="destructive" 
-                        size="sm"
-                        disabled={deletingId === trend.id}
-                        onClick={() => handleDeleteTrend(trend.id)}
-                      >
-                         <Trash2 className="w-4 h-4" />
-                      </Button>
+                    <TableCell className="text-right">
+                    <div className="flex justify-end items-center gap-2">
+                      {trend.status === 'pending' && (
+                        <>
+                          <Button size="sm" variant="default" className="h-8 bg-green-600 hover:bg-green-700" onClick={() => openPreviewModal(trend)}>Duyệt</Button>
+                          <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-200 hover:bg-red-50" onClick={() => updateStatus(trend.id, 'rejected')}>Bỏ qua</Button>
+                        </>
+                      )}
+                      <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="h-8 w-8 text-gray-400 hover:text-red-500"
+                          disabled={deletingId === trend.id}
+                          onClick={() => handleDeleteTrend(trend.id)}
+                        >
+                           <Trash2 className="w-4 h-4" />
+                        </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -294,6 +354,47 @@ export default function TrendsPage() {
                )}
                <Button variant="outline" onClick={() => setSelectedTrend(null)}>Đóng</Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Preview Telegram */}
+      <Dialog open={!!previewTrend} onOpenChange={(open) => !open && setPreviewTrend(null)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-blue-600" />
+                Xem trước tin nhắn Telegram
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="bg-slate-900 text-white p-6 rounded-xl font-mono text-[13px] leading-relaxed max-h-[500px] overflow-y-auto shadow-inner border border-slate-800">
+               {isPreviewLoading ? (
+                 <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-slate-400">Đang tạo bản xem trước...</span>
+                 </div>
+               ) : (
+                 <div dangerouslySetInnerHTML={{ __html: previewContent.replace(/\n/g, '<br/>') }} />
+               )}
+            </div>
+            <p className="mt-4 text-xs text-gray-500 italic flex items-center gap-2">
+                <Lightbulb className="w-3 h-3" />
+                Mẹo: Bạn nên kiểm tra kỹ các link video trước khi duyệt để đảm bảo chất lượng tin nhắn.
+            </p>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+             <Button variant="outline" onClick={() => setPreviewTrend(null)}>Quay lại</Button>
+             <Button 
+                variant="default" 
+                className="bg-green-600 hover:bg-green-700"
+                onClick={() => {
+                   updateStatus(previewTrend.id, 'approved');
+                   setPreviewTrend(null);
+                }}
+             >
+                Xác nhận & Gửi Telegram
+             </Button>
           </div>
         </DialogContent>
       </Dialog>

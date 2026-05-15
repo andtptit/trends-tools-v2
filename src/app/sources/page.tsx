@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Edit2, Trash2, Play } from "lucide-react";
+import { Edit2, Trash2, Play, Loader2, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
 
 export default function SourcesPage() {
   const [sources, setSources] = useState<any[]>([]);
@@ -35,6 +35,44 @@ export default function SourcesPage() {
   useEffect(() => {
     fetchSources();
     fetchCategories();
+
+    // Thiết lập Realtime subscription
+    const channel = supabase
+      .channel('crawl_sources_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'crawl_sources',
+        },
+        (payload) => {
+          console.log('Realtime update received:', payload);
+          const updatedSource = payload.new as any;
+          if (!updatedSource || !updatedSource.id) return;
+
+          setSources((prev) => 
+            prev.map((s) => s.id === updatedSource.id ? { ...s, ...updatedSource } : s)
+          );
+
+          // Thông báo khi hoàn thành hoặc lỗi
+          if (updatedSource.last_crawl_status === 'completed') {
+            toast.success(`Nguồn "${updatedSource.name}" đã cào xong dữ liệu!`, {
+                icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
+                duration: 5000
+            });
+          } else if (updatedSource.last_crawl_status === 'error') {
+            toast.error(`Nguồn "${updatedSource.name}" gặp lỗi khi cào.`);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchCategories = async () => {
@@ -74,6 +112,21 @@ export default function SourcesPage() {
       }
     } catch (e) {
       toast.error("Lỗi kết nối API");
+    }
+  };
+
+  const resetStatus = async (id: string) => {
+    // 5. Cập nhật trạng thái nguồn đã hoàn thành
+    const { error } = await supabase
+        .from('crawl_sources')
+        .update({ last_crawl_status: 'idle' })
+        .eq('id', id);
+    
+    if (error) {
+        toast.error("Không thể reset trạng thái");
+    } else {
+        setSources(prev => prev.map(s => s.id === id ? { ...s, last_crawl_status: 'idle' } : s));
+        toast.success("Đã reset trạng thái nguồn");
     }
   };
 
@@ -192,17 +245,52 @@ export default function SourcesPage() {
                   </TableCell>
                   <TableCell className="text-gray-500">{source.url}</TableCell>
                   <TableCell>
-                    <Badge variant={source.is_active ? "default" : "secondary"}>
-                      {source.is_active ? 'Đang hoạt động' : 'Tạm dừng'}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                        <Badge variant={source.is_active ? "default" : "secondary"}>
+                        {source.is_active ? 'Đang hoạt động' : 'Tạm dừng'}
+                        </Badge>
+                        {source.last_crawl_status === 'running' && (
+                            <div className="flex items-center gap-1.5 text-[10px] text-blue-600 font-bold animate-pulse">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                ĐANG CÀO...
+                            </div>
+                        )}
+                        {source.last_crawl_status === 'completed' && (
+                            <div className="flex items-center gap-1 text-[10px] text-green-600 font-medium">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Vừa cào xong
+                            </div>
+                        )}
+                        {source.last_crawl_status === 'error' && (
+                             <div className="flex items-center gap-1 text-[10px] text-red-600 font-medium">
+                                <AlertCircle className="w-3 h-3" />
+                                Lỗi crawl
+                            </div>
+                        )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right space-x-2">
-                     <Button size="icon" variant="outline" onClick={() => triggerCrawl(source.id)} title="Cào ngay">
-                        <Play className="w-4 h-4 text-green-600" />
+                     <Button 
+                        size="icon" 
+                        variant="outline" 
+                        onClick={() => triggerCrawl(source.id)} 
+                        title="Cào ngay"
+                        disabled={source.last_crawl_status === 'running'}
+                    >
+                        {source.last_crawl_status === 'running' ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                        ) : (
+                            <Play className="w-4 h-4 text-green-600" />
+                        )}
                      </Button>
                      <Button size="icon" variant="outline" onClick={() => openEditModal(source)} title="Sửa">
                         <Edit2 className="w-4 h-4 text-blue-600" />
                      </Button>
+                     {source.last_crawl_status !== 'idle' && (
+                         <Button size="icon" variant="outline" onClick={() => resetStatus(source.id)} title="Reset trạng thái">
+                            <RefreshCw className="w-4 h-4 text-orange-500" />
+                         </Button>
+                     )}
                      <Button size="icon" variant="outline" onClick={() => handleDeleteSource(source.id)} title="Xoá">
                         <Trash2 className="w-4 h-4 text-red-600" />
                      </Button>
