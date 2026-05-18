@@ -48,22 +48,33 @@
     },
     {
       "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nif (items.length === 0) return [];\nconst item_ids = items.map(e => e.json.item_ids).filter(Boolean);\nreturn [{\n    json: {\n        item_ids: item_ids,\n        category_id: items[0].json.category_id,\n        log_id: items[0].json.log_id,\n        app_url: items[0].json.app_url\n    }\n}];"
+      },
+      "id": "group-batch",
+      "name": "Gom Lô để gọi API",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [950, 200]
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "={{ $('Khởi tạo Data').item.json.app_url }}/api/ai/analyze-batch",
+        "url": "={{ $json.app_url }}/api/ai/analyze-batch",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
               "name": "item_ids",
-              "value": "={{ $input.all().map(e => e.json.item_ids) }}"
+              "value": "={{ $json.item_ids }}"
             },
             {
               "name": "category_id",
-              "value": "={{ $('Khởi tạo Data').item.json.category_id }}"
+              "value": "={{ $json.category_id }}"
             },
             {
               "name": "log_id",
-              "value": "={{ $('Khởi tạo Data').item.json.log_id }}"
+              "value": "={{ $json.log_id }}"
             },
             {
               "name": "is_final_batch",
@@ -83,7 +94,7 @@
       "name": "Gọi Vercel API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1000, 300]
+      "position": [1100, 200]
     },
     {
       "parameters": {
@@ -94,22 +105,33 @@
       "name": "Cộng dồn Token",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1200, 300]
+      "position": [1280, 200]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nif (items.length === 0) return [];\nreturn [{\n    json: {\n        log_id: items[0].json.log_id,\n        category_id: items[0].json.category_id,\n        app_url: items[0].json.app_url\n    }\n}];"
+      },
+      "id": "group-reduce",
+      "name": "Gom Kết Quả để Reduce",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [950, 450]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Khởi tạo Data').item.json.app_url }}/api/ai/reduce-trends",
+        "url": "={{ $json.app_url }}/api/ai/reduce-trends",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
               "name": "log_id",
-              "value": "={{ $('Khởi tạo Data').item.json.log_id }}"
+              "value": "={{ $json.log_id }}"
             },
             {
               "name": "category_id",
-              "value": "={{ $('Khởi tạo Data').item.json.category_id }}"
+              "value": "={{ $json.category_id }}"
             },
             {
               "name": "accumulated_tokens",
@@ -125,7 +147,7 @@
       "name": "Hợp nhất Trends (Reduce)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1000, 500]
+      "position": [1150, 450]
     }
   ],
   "connections": {
@@ -166,11 +188,22 @@
       "main": [
         [
           {
-            "node": "Hợp nhất Trends (Reduce)",
+            "node": "Gom Kết Quả để Reduce",
             "type": "main",
             "index": 0
           }
         ],
+        [
+          {
+            "node": "Gom Lô để gọi API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gom Lô để gọi API": {
+      "main": [
         [
           {
             "node": "Gọi Vercel API",
@@ -196,6 +229,17 @@
         [
           {
             "node": "Lặp từng lô (15 bài)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gom Kết Quả để Reduce": {
+      "main": [
+        [
+          {
+            "node": "Hợp nhất Trends (Reduce)",
             "type": "main",
             "index": 0
           }
