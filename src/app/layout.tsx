@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Link from "next/link";
-import { TrendingUp, Database, Activity, FileText, Layers } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -21,11 +19,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi">
-      <body className={`${inter.className} flex h-screen bg-gray-50 overflow-hidden`}>
+      <body className={`${inter.className} flex flex-col md:flex-row h-screen bg-gray-50 overflow-hidden`}>
         <Sidebar />
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto p-4 md:p-8">
           {children}
         </main>
         

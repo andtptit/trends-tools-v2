@@ -81,6 +81,8 @@ export default function AILogsPage() {
                     <TableCell>
                       {log.status === 'success' ? (
                          <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Thành công</Badge>
+                      ) : log.status === 'processing' ? (
+                         <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">Đang xử lý</Badge>
                       ) : (
                          <Badge variant="destructive">Lỗi</Badge>
                       )}
@@ -108,12 +110,29 @@ export default function AILogsPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-             {selectedLog?.error_message && (
-                <div className="bg-red-50 text-red-700 p-4 rounded-md border border-red-200">
-                   <strong>Lỗi:</strong> {selectedLog.error_message}
+             <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-md border">
+                <div>
+                   <p className="text-xs text-gray-500">Trạng thái tiến trình:</p>
+                   <p className="font-semibold">{selectedLog?.status === 'success' ? '✅ Chạy xong' : selectedLog?.status === 'processing' ? '⏳ Đang xử lý...' : '❌ Có lỗi'}</p>
                 </div>
-             )}
-             
+                <div>
+                   <p className="text-xs text-gray-500">Model phân tích:</p>
+                   <p className="font-semibold">Gemini 2.5 Flash</p>
+                </div>
+                <div>
+                   <p className="text-xs text-gray-500">Số lượng Trends trả về:</p>
+                   <p className="font-semibold text-purple-600">{selectedLog?.trends_found || 0} trends</p>
+                </div>
+                <div>
+                   <p className="text-xs text-gray-500">Token đã dùng:</p>
+                   <p className="font-semibold text-blue-600">{
+                      selectedLog?.tokens_used 
+                        ? selectedLog.tokens_used.toLocaleString() 
+                        : (selectedLog?.response_raw?.match(/Tokens.*?: ([\d,]+)/)?.[1] || 'N/A')
+                   }</p>
+                </div>
+             </div>
+
              <div>
                 <h4 className="font-semibold mb-2">Prompt đã sử dụng:</h4>
                 <div className="bg-gray-100 p-4 rounded-md text-xs text-gray-700 whitespace-pre-wrap font-mono">
@@ -121,12 +140,14 @@ export default function AILogsPage() {
                 </div>
              </div>
 
-             <div>
-                <h4 className="font-semibold mb-2">Phản hồi thô (JSON):</h4>
-                <div className="bg-gray-900 text-green-400 p-4 rounded-md text-xs whitespace-pre-wrap font-mono overflow-x-auto">
-                   {selectedLog?.response_raw || 'Không có dữ liệu'}
+             {selectedLog?.error_message && (
+                <div>
+                   <h4 className="font-semibold mb-2 text-red-600">Chi tiết Lỗi:</h4>
+                   <div className="bg-red-50 text-red-700 p-4 rounded-md border border-red-200 text-xs font-mono">
+                      {selectedLog.error_message}
+                   </div>
                 </div>
-             </div>
+             )}
           </div>
         </DialogContent>
       </Dialog>

@@ -36,6 +36,8 @@ export default function RawDataPage() {
   const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzeProgress, setAnalyzeProgress] = useState(0);
+  const [analyzeStatusText, setAnalyzeStatusText] = useState("");
 
   // Hàm tính thời gian đã trôi qua (Relative Time)
   const formatRelativeTime = (dateString: string) => {
@@ -129,13 +131,6 @@ export default function RawDataPage() {
     }
   };
 
-  const openAnalyzeModal = () => {
-    if (selectedIds.size === 0) {
-      toast.warning("Vui lòng chọn ít nhất 1 bài để phân tích!");
-      return;
-    }
-    setIsAnalyzeModalOpen(true);
-  };
 
   const handleSyncCategories = async () => {
     setLoading(true);
@@ -162,35 +157,92 @@ export default function RawDataPage() {
     }
   };
 
-  const handleAnalyze = async () => {
-    if (!selectedCategoryId) {
-      toast.error("Vui lòng chọn Nhóm Niche để áp dụng Prompt!");
-      return;
-    }
+  const openAnalyzeModal = () => {
+    setIsAnalyzeModalOpen(true);
+  };
 
+  const handleAnalyze = async () => {
     setIsAnalyzing(true);
+    setAnalyzeProgress(0);
+    setAnalyzeStatusText("Đang khởi tạo...");
+    
     try {
-      const res = await fetch('/api/ai/analyze', { 
+      // 1. Determine IDs to analyze
+      let targetIds = Array.from(selectedIds);
+      if (targetIds.length === 0) {
+        setAnalyzeStatusText("Đang lấy danh sách bài viết...");
+        // Fetch unanalyzed items based on category
+        let query = supabase.from('crawled_data').select('id').eq('is_analyzed', false);
+        if (selectedCategoryId && selectedCategoryId !== 'all') {
+            query = query.eq('category_id', selectedCategoryId);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            toast.info("Không có bài viết nào cần phân tích.");
+            setIsAnalyzing(false);
+            return;
+        }
+        targetIds = data.map(d => d.id as string);
+      }
+
+      // 2. Start Session
+      setAnalyzeStatusText("Đang tạo phiên phân tích...");
+      const sessionRes = await fetch('/api/ai/start-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          item_ids: Array.from(selectedIds),
-          category_id: selectedCategoryId
-        })
+        body: JSON.stringify({ category_id: selectedCategoryId || 'all', total_items: targetIds.length })
       });
+      const sessionData = await sessionRes.json();
+      if (!sessionRes.ok) throw new Error(sessionData.error || "Không thể tạo phiên");
+      const logId = sessionData.log_id;
+
+      // 3. Batch Processing
+      const BATCH_SIZE = 15;
+      let accumulatedTokens = 0;
+      let totalFound = 0;
       
-      const result = await res.json();
-      
-      if (res.ok) {
-        toast.success(result.message || "Phân tích thành công!");
-        setIsAnalyzeModalOpen(false);
-        setSelectedIds(new Set());
-        fetchData(); 
-      } else {
-        toast.error(result.error || "Có lỗi khi phân tích");
+      for (let i = 0; i < targetIds.length; i += BATCH_SIZE) {
+        const batchIds = targetIds.slice(i, i + BATCH_SIZE);
+        const isFinal = (i + BATCH_SIZE) >= targetIds.length;
+        const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(targetIds.length / BATCH_SIZE);
+        
+        setAnalyzeStatusText(`Đang xử lý lô ${currentBatch}/${totalBatches}...`);
+        setAnalyzeProgress(Math.round((i / targetIds.length) * 100));
+
+        const batchRes = await fetch('/api/ai/analyze-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                item_ids: batchIds,
+                category_id: selectedCategoryId || 'all',
+                log_id: logId,
+                is_final_batch: isFinal,
+                accumulated_tokens: accumulatedTokens
+            })
+        });
+        
+        const batchData = await batchRes.json();
+        if (!batchRes.ok) throw new Error(batchData.error || `Lỗi ở lô ${currentBatch}`);
+        
+        accumulatedTokens += (batchData.tokens_used || 0);
+        totalFound += (batchData.trends_found || 0);
       }
-    } catch (e) {
-      toast.error("Lỗi kết nối API AI");
+
+      setAnalyzeProgress(100);
+      setAnalyzeStatusText(`Hoàn tất! Tìm thấy ${totalFound} trends mới.`);
+      toast.success("Phân tích hoàn tất!");
+      
+      setTimeout(() => {
+          setIsAnalyzeModalOpen(false);
+          setSelectedIds(new Set());
+          fetchData(); // Refresh table
+      }, 2000);
+
+    } catch (error: any) {
+      setAnalyzeStatusText("Lỗi: " + error.message);
+      toast.error("Lỗi phân tích: " + error.message);
     } finally {
       setIsAnalyzing(false);
     }
@@ -254,9 +306,9 @@ export default function RawDataPage() {
             <Button onClick={handleSyncCategories} variant="outline" className="h-10 border-gray-200 text-gray-600 hover:bg-gray-50">
                Cập nhật Niche
             </Button>
-            <Button onClick={openAnalyzeModal} variant="default" className="h-10 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-md shadow-purple-200">
+            <Button onClick={openAnalyzeModal} disabled={isAnalyzing} variant="default" className="h-10 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-md shadow-purple-200">
                <BrainCircuit className="w-4 h-4 mr-2" />
-               Bắt đầu phân tích ({selectedIds.size})
+               Chạy Agent Phân Tích {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
             </Button>
         </div>
       </div>
@@ -408,16 +460,35 @@ export default function RawDataPage() {
       {/* AI Modal */}
       <Dialog open={isAnalyzeModalOpen} onOpenChange={setIsAnalyzeModalOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Phân tích {selectedIds.size} bài bài đăng</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Chạy Agent Phân Tích {selectedIds.size > 0 ? `(${selectedIds.size} bài đã chọn)` : '(Lọc bài mới)'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Chọn Nhóm Niche</Label>
+              <Label>Chọn Nhóm Niche (Áp dụng Prompt riêng)</Label>
               <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
-                <option value="" disabled>-- Chọn Niche --</option>
+                <option value="all">-- Phân tích tất cả Niche --</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            <Button onClick={handleAnalyze} disabled={isAnalyzing} className="w-full bg-purple-600">{isAnalyzing ? 'Đang phân tích...' : 'Bắt đầu'}</Button>
+            <Button onClick={handleAnalyze} disabled={isAnalyzing} className="w-full bg-purple-600">{isAnalyzing ? 'Đang phân tích...' : 'Bắt đầu chạy AI'}</Button>
+            
+            {isAnalyzing && (
+              <div className="space-y-2 mt-4 bg-gray-50 p-4 rounded-lg border">
+                <div className="flex justify-between text-xs text-gray-500 font-medium">
+                  <span>{analyzeStatusText}</span>
+                  <span>{analyzeProgress}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-purple-600 h-2 rounded-full transition-all duration-300" style={{ width: `${analyzeProgress}%` }}></div>
+                </div>
+                <p className="text-xs text-red-500 italic mt-1">⚠️ Vui lòng KHÔNG đóng trình duyệt trong lúc tiến trình đang chạy.</p>
+              </div>
+            )}
+            
+            {analyzeProgress === 100 && !isAnalyzing && (
+              <div className="p-3 bg-green-50 text-green-700 rounded-md text-sm text-center">
+                {analyzeStatusText}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
