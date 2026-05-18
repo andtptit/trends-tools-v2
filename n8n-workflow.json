@@ -1,0 +1,206 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trend-agent",
+        "options": {}
+      },
+      "id": "e4468f74-32c0-43eb-8e2b-f1deec20f31a",
+      "name": "Webhook (Từ Vercel)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "webhookId": "trend-agent-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $input.all()[0].json.body || $input.all()[0].json;\n\nif (typeof $workflow !== 'undefined' && $workflow.staticData) {\n    if (!$workflow.staticData.totalTokens) $workflow.staticData.totalTokens = 0;\n}\n\nreturn [\n  {\n    json: {\n      item_ids: input.item_ids || [],\n      category_id: input.category_id,\n      log_id: input.log_id,\n      app_url: 'https://trends-tools-v2.vercel.app'\n    }\n  }\n];"
+      },
+      "id": "code-init",
+      "name": "Khởi tạo Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "item_ids",
+        "options": {}
+      },
+      "id": "split-items",
+      "name": "Tách từng ID",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 15,
+        "options": {}
+      },
+      "id": "loop-node",
+      "name": "Lặp từng lô (15 bài)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Khởi tạo Data').item.json.app_url }}/api/ai/analyze-batch",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "item_ids",
+              "value": "={{ $input.all().map(e => e.json.item_ids) }}"
+            },
+            {
+              "name": "category_id",
+              "value": "={{ $('Khởi tạo Data').item.json.category_id }}"
+            },
+            {
+              "name": "log_id",
+              "value": "={{ $('Khởi tạo Data').item.json.log_id }}"
+            },
+            {
+              "name": "is_final_batch",
+              "value": "={{ $node['Lặp từng lô (15 bài)'].context.noItemsLeft }}"
+            },
+            {
+              "name": "accumulated_tokens",
+              "value": "={{ $workflow.staticData ? ($workflow.staticData.totalTokens || 0) : 0 }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "call-api",
+      "name": "Gọi Vercel API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const response = $input.all()[0].json;\nif (typeof $workflow !== 'undefined' && $workflow.staticData) {\n    $workflow.staticData.totalTokens = ($workflow.staticData.totalTokens || 0) + (response.tokens_used || 0);\n    if ($node['Lặp từng lô (15 bài)'].context.noItemsLeft) {\n        $workflow.staticData.totalTokens = 0;\n    }\n}\nreturn $input.all();"
+      },
+      "id": "accumulate-tokens",
+      "name": "Cộng dồn Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Khởi tạo Data').item.json.app_url }}/api/ai/reduce-trends",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "log_id",
+              "value": "={{ $('Khởi tạo Data').item.json.log_id }}"
+            },
+            {
+              "name": "category_id",
+              "value": "={{ $('Khởi tạo Data').item.json.category_id }}"
+            },
+            {
+              "name": "accumulated_tokens",
+              "value": "={{ $workflow.staticData ? ($workflow.staticData.totalTokens || 0) : 0 }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "reduce-trends",
+      "name": "Hợp nhất Trends (Reduce)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 500]
+    }
+  ],
+  "connections": {
+    "Webhook (Từ Vercel)": {
+      "main": [
+        [
+          {
+            "node": "Khởi tạo Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Khởi tạo Data": {
+      "main": [
+        [
+          {
+            "node": "Tách từng ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tách từng ID": {
+      "main": [
+        [
+          {
+            "node": "Lặp từng lô (15 bài)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lặp từng lô (15 bài)": {
+      "main": [
+        [
+          {
+            "node": "Hợp nhất Trends (Reduce)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gọi Vercel API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gọi Vercel API": {
+      "main": [
+        [
+          {
+            "node": "Cộng dồn Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cộng dồn Token": {
+      "main": [
+        [
+          {
+            "node": "Lặp từng lô (15 bài)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -45,17 +45,30 @@ export async function POST(request: Request) {
         });
     }
 
+    let customPrompt = "";
+    let min_videos = 1;
+    let min_channels = 1;
+
     if (category_id && category_id !== 'all') {
-        const { data: catData } = await supabaseAdmin.from('categories').select('prompt').eq('id', category_id).single();
-        if (catData?.prompt) {
-            base_prompt = catData.prompt;
+        const { data: catData } = await supabaseAdmin.from('categories').select('custom_prompt, min_videos, min_channels').eq('id', category_id).single();
+        if (catData) {
+            if (catData.custom_prompt) {
+                customPrompt = `\n\n[HƯỚNG DẪN CHUYÊN MÔN DÀNH RIÊNG CHO NICHE NÀY]:\n${catData.custom_prompt}`;
+            }
+            if (catData.min_videos) min_videos = catData.min_videos;
+            if (catData.min_channels) min_channels = catData.min_channels;
         }
     }
 
     const dataContext = rawData.map((item, index) => {
+        const safeScript = item.transcript 
+             ? item.transcript.substring(0, 2000) + (item.transcript.length > 2000 ? "..." : "")
+             : "N/A";
+
         return `Item ${index + 1} (ID: ${item.id}):
 - Kênh: ${item.author_name} (${item.author_fans} fans)
 - Content: ${item.text_content}
+- Kịch bản (Script): ${safeScript}
 - Âm nhạc: ${item.music_name || 'N/A'}
 - Metrics: ${item.views_count} views, ${item.likes_count} likes, ${item.collect_count} saved
 `;
@@ -63,10 +76,23 @@ export async function POST(request: Request) {
 
     const prompt = `
 ${base_prompt}
+${customPrompt}
 
-ĐIỀU KIỆN LỌC TREND BẮT BUỘC:
-- Một Trend phải xuất hiện trong ít nhất 1 video/bài đăng khác nhau.
-- Một Trend phải được đăng tải bởi ít nhất 1 kênh (author) khác nhau.
+ĐIỀU KIỆN LỌC TREND BẮT BUỘC (TUYỆT ĐỐI TUÂN THỦ):
+1. ĐỊNH NGHĨA TREND: Một Trend CHỈ ĐƯỢC CÔNG NHẬN khi có sự lặp lại rõ ràng và liên kết giữa các kênh khác nhau, bao gồm:
+   - 1 sự việc/tin tức cụ thể đang được nhiều bên "đu" theo.
+   - 1 âm thanh/bài hát lặp lại có chủ đích.
+   - 1 đoạn text, 1 hiệu ứng hình ảnh lặp lại.
+   - 1 cách kể chuyện, 1 format (hook) lặp lại.
+2. LOẠI BỎ RÁC: Những tin tức chung chung, video rời rạc, không có sự liên hệ, gắn kết hoặc bắt chước nhau giữa các kênh thì TUYỆT ĐỐI KHÔNG PHẢI LÀ TREND. Bỏ qua ngay lập tức!
+3. CHỐNG TRÙNG LẶP: Gom TẤT CẢ các video có cùng chung một Trend vào MỘT kết quả (item) duy nhất. CẤM tạo ra các Trend trùng lặp hoặc na ná nhau.
+4. ĐIỀU KIỆN TỐI THIỂU:
+   - Phải xuất hiện ở ít nhất ${min_videos} video khác nhau.
+   - Phải được đăng tải bởi ít nhất ${min_channels} kênh khác nhau.
+
+HƯỚNG DẪN ĐỌC KỊCH BẢN (SCRIPT):
+- Bắt buộc phải soi kỹ trường "Kịch bản (Script)" của từng video.
+- Hãy tìm kiếm các mẫu lặp lại (Patterns) nhỏ nhất: một câu nói đùa, một từ lóng, một cấu trúc kể chuyện (hook), hoặc một hành động cụ thể xuất hiện chéo ở nhiều kênh.
 
 Dữ liệu đầu vào:
 ${dataContext}
@@ -150,9 +176,9 @@ ${dataContext}
                 trends_found: newTrends,
                 prompt_used: base_prompt,
                 response_raw: is_final_batch 
-                    ? `✅ Hoàn tất! Phân tích ${newItems} bài, tìm thấy ${newTrends} trends.\n\n📊 Tổng Tokens: ${newTokens.toLocaleString()}` 
-                    : `⏳ Đang xử lý... Đã phân tích ${newItems} bài, tìm thấy ${newTrends} trends.\n\n📊 Tokens tích lũy: ${newTokens.toLocaleString()}`,
-                status: is_final_batch ? 'success' : 'processing'
+                    ? `⏳ Đang chuẩn bị hợp nhất dữ liệu (Map-Reduce)... Đã phân tích ${newItems} bài, tìm thấy ${newTrends} trends thô.\n\n📊 Tổng Tokens: ${newTokens.toLocaleString()}` 
+                    : `⏳ Đang xử lý lô... Đã phân tích ${newItems} bài, tìm thấy ${newTrends} trends thô.\n\n📊 Tokens tích lũy: ${newTokens.toLocaleString()}`,
+                status: 'processing'
             }).eq('id', log_id);
             
             console.log(`[DEBUG] Update Error:`, updateError);

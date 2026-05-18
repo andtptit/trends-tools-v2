@@ -197,42 +197,29 @@ export default function RawDataPage() {
       if (!sessionRes.ok) throw new Error(sessionData.error || "Không thể tạo phiên");
       const logId = sessionData.log_id;
 
-      // 3. Batch Processing
-      const BATCH_SIZE = 15;
-      let accumulatedTokens = 0;
-      let totalFound = 0;
-      
-      for (let i = 0; i < targetIds.length; i += BATCH_SIZE) {
-        const batchIds = targetIds.slice(i, i + BATCH_SIZE);
-        const isFinal = (i + BATCH_SIZE) >= targetIds.length;
-        const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(targetIds.length / BATCH_SIZE);
-        
-        setAnalyzeStatusText(`Đang xử lý lô ${currentBatch}/${totalBatches}...`);
-        setAnalyzeProgress(Math.round((i / targetIds.length) * 100));
-
-        const batchRes = await fetch('/api/ai/analyze-batch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                item_ids: batchIds,
-                category_id: selectedCategoryId || 'all',
-                log_id: logId,
-                is_final_batch: isFinal,
-                accumulated_tokens: accumulatedTokens
-            })
-        });
-        
-        const batchData = await batchRes.json();
-        if (!batchRes.ok) throw new Error(batchData.error || `Lỗi ở lô ${currentBatch}`);
-        
-        accumulatedTokens += (batchData.tokens_used || 0);
-        totalFound += (batchData.trends_found || 0);
+      // 3. Gửi Webhook cho n8n
+      setAnalyzeStatusText("Đang gửi lệnh cho n8n...");
+      const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL;
+      if (!webhookUrl || webhookUrl.includes('your-n8n-url')) {
+          throw new Error("Chưa cấu hình NEXT_PUBLIC_N8N_WEBHOOK_URL hợp lệ");
       }
 
+      const webhookRes = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              item_ids: targetIds,
+              category_id: selectedCategoryId || 'all',
+              log_id: logId
+          })
+      });
+      
+      if (!webhookRes.ok) throw new Error("n8n Webhook không phản hồi hoặc báo lỗi");
+
+
       setAnalyzeProgress(100);
-      setAnalyzeStatusText(`Hoàn tất! Tìm thấy ${totalFound} trends mới.`);
-      toast.success("Phân tích hoàn tất!");
+      setAnalyzeStatusText(`Đã gửi lệnh cho n8n thành công!`);
+      toast.success("Tiến trình đang chạy ngầm qua n8n. Xem tiến độ tại tab Nhật ký AI.");
       
       setTimeout(() => {
           setIsAnalyzeModalOpen(false);
