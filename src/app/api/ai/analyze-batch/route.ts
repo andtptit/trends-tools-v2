@@ -65,7 +65,7 @@ export async function POST(request: Request) {
              ? item.transcript.substring(0, 2000) + (item.transcript.length > 2000 ? "..." : "")
              : "N/A";
 
-        const hours = Math.max(1, (Date.now() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
+        const hours = Math.max(1, (new Date(item.created_at || Date.now()).getTime() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
         const viewsPerHour = Math.round((item.views_count || 0) / hours);
 
         return `Item ${index + 1} (ID: ${item.id}):
@@ -82,17 +82,10 @@ export async function POST(request: Request) {
 ${base_prompt}
 ${customPrompt}
 
-ĐIỀU KIỆN LỌC TREND BẮT BUỘC (TUYỆT ĐỐI TUÂN THỦ):
-1. ĐỊNH NGHĨA TREND: Một Trend CHỈ ĐƯỢC CÔNG NHẬN khi có sự lặp lại rõ ràng và liên kết giữa các kênh khác nhau, bao gồm:
-   - 1 sự việc/tin tức cụ thể đang được nhiều bên "đu" theo.
-   - 1 âm thanh/bài hát lặp lại có chủ đích.
-   - 1 đoạn text, 1 hiệu ứng hình ảnh lặp lại.
-   - 1 cách kể chuyện, 1 format (hook) lặp lại.
-2. LOẠI BỎ RÁC: Những tin tức chung chung, video rời rạc, không có sự liên hệ, gắn kết hoặc bắt chước nhau giữa các kênh thì TUYỆT ĐỐI KHÔNG PHẢI LÀ TREND. Bỏ qua ngay lập tức!
-3. CHỐNG TRÙNG LẶP: Gom TẤT CẢ các video có cùng chung một Trend vào MỘT kết quả (item) duy nhất. CẤM tạo ra các Trend trùng lặp hoặc na ná nhau.
-4. ĐIỀU KIỆN TỐI THIỂU:
-   - Phải xuất hiện ở ít nhất ${min_videos} video khác nhau.
-   - Phải được đăng tải bởi ít nhất ${min_channels} kênh khác nhau.
+ĐIỀU KIỆN LỌC TREND (TUYỆT ĐỐI TUÂN THỦ):
+1. ĐỊNH NGHĨA TREND: Một Trend là các chủ đề, sự việc, âm nhạc, đoạn text hoặc kịch bản có tính chất lan truyền, lặp lại hoặc có tiềm năng viral.
+2. THU THẬP TIỀM NĂNG: Trong bước phân tích theo lô này, hãy liệt kê tất cả các chủ đề/trend tiềm năng (kể cả chủ đề đó chỉ mới xuất hiện ở 1 video hoặc 1 kênh trong lô này). ĐỪNG LỌC điều kiện tối thiểu số video hay số kênh ở bước này (bước đó sẽ do hệ thống lọc sau).
+3. CHỐNG TRÙNG LẶP: Gom tất cả các video cùng chung một chủ đề trong lô này vào một kết quả duy nhất.
 
 HƯỚNG DẪN ĐỌC KỊCH BẢN (SCRIPT):
 - Bắt buộc phải soi kỹ trường "Kịch bản (Script)" của từng video.

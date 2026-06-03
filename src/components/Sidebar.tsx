@@ -96,7 +96,7 @@ export function Sidebar() {
         })}
       </nav>
       <div className="p-4 border-t text-center shrink-0">
-        <p className="text-[10px] text-gray-400 font-medium tracking-widest uppercase">Version 2.4 Premium</p>
+        <p className="text-[10px] text-gray-400 font-medium tracking-widest uppercase">Version 2.5 Premium</p>
       </div>
     </aside>
     </>

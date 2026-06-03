@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     // 1. Lấy dữ liệu chưa phân tích từ database
     let query = supabaseAdmin
       .from('crawled_data')
-      .select('id, author_name, author_username, author_fans, author_verified, text_content, views_count, likes_count, comments_count, shares_count, collect_count, music_id, music_name, video_duration, is_slideshow, posted_at');
+      .select('id, author_name, author_username, author_fans, author_verified, text_content, views_count, likes_count, comments_count, shares_count, collect_count, music_id, music_name, video_duration, is_slideshow, posted_at, created_at');
       
     if (item_ids.length > 0) {
         query = query.in('id', item_ids);
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 
     // 2. Chuyển đổi dữ liệu thành chuỗi văn bản cho Prompt
     const dataContext = rawData.map((item, index) => {
-      const hours = Math.max(1, (Date.now() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
+      const hours = Math.max(1, (new Date(item.created_at || Date.now()).getTime() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
       const viewsPerHour = Math.round((item.views_count || 0) / hours);
 
       return `Item ${index + 1} (ID: ${item.id}):
@@ -194,7 +194,7 @@ ${dataContext}
             const channelKey = item.author_username || item.author_name || 'Unknown';
             uniqueChannels.add(channelKey);
 
-            const hours = Math.max(1, (Date.now() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
+            const hours = Math.max(1, (new Date(item.created_at || Date.now()).getTime() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
             velocitySum += (item.views_count || 0) / hours;
 
             if (item.music_id && item.music_name) {

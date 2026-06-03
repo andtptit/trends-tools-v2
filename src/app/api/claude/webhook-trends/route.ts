@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     if (allCrawledIds.length > 0) {
       const { data } = await supabaseAdmin
         .from('crawled_data')
-        .select('id, author_name, author_username, views_count, likes_count, comments_count, shares_count, collect_count, music_id, music_name, posted_at')
+        .select('id, author_name, author_username, views_count, likes_count, comments_count, shares_count, collect_count, music_id, music_name, posted_at, created_at')
         .in('id', [...new Set(allCrawledIds)]);
       if (data) rawData = data;
     }
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
             const channelKey = item.author_username || item.author_name || 'Unknown';
             uniqueChannels.add(channelKey);
 
-            const hours = Math.max(1, (Date.now() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
+            const hours = Math.max(1, (new Date(item.created_at || Date.now()).getTime() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
             velocitySum += (item.views_count || 0) / hours;
 
             if (item.music_id && item.music_name) {

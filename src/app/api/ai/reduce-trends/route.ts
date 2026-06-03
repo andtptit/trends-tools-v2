@@ -35,7 +35,16 @@ export async function POST(request: Request) {
         });
     }
 
-    // 1. Fetch all pending trends for this category
+    let min_videos = 1;
+    let min_channels = 1;
+    if (category_id && category_id !== 'all') {
+        const { data: catData } = await supabaseAdmin.from('categories').select('min_videos, min_channels').eq('id', category_id).single();
+        if (catData) {
+            if (catData.min_videos) min_videos = catData.min_videos;
+            if (catData.min_channels) min_channels = catData.min_channels;
+        }
+    }
+
     let query = supabaseAdmin.from('trends').select('*').eq('status', 'pending');
     if (category_id && category_id !== 'all') {
         query = query.eq('category_id', category_id);
@@ -72,11 +81,14 @@ export async function POST(request: Request) {
 Bạn là chuyên gia phân tích dữ liệu mạng xã hội (Data Scientist).
 Nhiệm vụ của bạn là gộp (Reduce) danh sách các Trend thô bị trùng lặp dưới đây thành một danh sách các Trend tinh hoa duy nhất.
 
-LUẬT GỘP TREND (BẮT BUỘC):
+LUẬT GỘP TREND & LỌC ĐIỀU KIỆN (BẮT BUỘC):
 1. Nhận diện các Trend trùng lặp: Nếu nhiều Trend thô nói về cùng 1 bài nhạc, cùng 1 format, hoặc cùng 1 sự kiện -> GỘP CHÚNG LẠI THÀNH 1 TREND.
 2. Cộng dồn số liệu: Khi gộp, phải gộp toàn bộ danh sách "IDs bài viết" của chúng lại với nhau (để không bị sót bài nào).
 3. Viết lại thông tin: Viết lại "Tên Trend" và "Lý do Viral" sao cho bao quát và chuyên nghiệp nhất.
-4. Lọc rác: Xóa bỏ hoàn toàn các Trend quá chung chung, không có điểm nhấn, hoặc chỉ có 1 video.
+4. Lọc điều kiện tối thiểu: Sau khi bạn gộp danh sách "IDs bài viết" của các Trend trùng lặp lại, hãy kiểm tra:
+   - Trend đó phải có tổng cộng từ ${min_videos} bài viết (IDs) trở lên.
+   - Trend đó phải xuất hiện ở từ ${min_channels} kênh khác nhau trở lên (dựa trên thông tin trend thô).
+   Nếu không thỏa mãn cả hai điều kiện trên, hãy LOẠI BỎ hoàn toàn trend đó khỏi danh sách kết quả.
 5. Số lượng kênh và video: Bạn không cần đếm chính xác, hệ thống sẽ tự đếm dựa trên IDs bài viết bạn trả về. Bạn chỉ cần trả về mảng crawled_data_ids chứa TẤT CẢ các ID của các video thuộc Trend đã gộp.
 
 DỮ LIỆU CÁC TREND THÔ:
@@ -135,7 +147,7 @@ ${trendsContext}
         // Truy vấn dữ liệu thực tế từ database để tính điểm định lượng cho trend tinh
         const { data: relatedItems } = await supabaseAdmin
             .from('crawled_data')
-            .select('author_name, author_username, views_count, likes_count, comments_count, shares_count, collect_count, music_id, music_name, posted_at')
+            .select('author_name, author_username, views_count, likes_count, comments_count, shares_count, collect_count, music_id, music_name, posted_at, created_at')
             .in('id', uniqueIds);
 
         let totalViews = 0;
@@ -155,7 +167,7 @@ ${trendsContext}
                 const channelKey = item.author_username || item.author_name || 'Unknown';
                 uniqueChannels.add(channelKey);
 
-                const hours = Math.max(1, (Date.now() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
+                const hours = Math.max(1, (new Date(item.created_at || Date.now()).getTime() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
                 velocitySum += (item.views_count || 0) / hours;
 
                 if (item.music_id && item.music_name) {
