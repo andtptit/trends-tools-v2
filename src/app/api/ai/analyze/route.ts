@@ -231,6 +231,7 @@ ${dataContext}
         const avgEngagementRate = totalViews > 0 ? (totalEngagement / totalViews) : 0;
         const engagementScore = Math.min(100, (avgEngagementRate / 0.15) * 100); // 15% rate is 100 points
 
+        const quantitativeScore = (velocityScore * velocityWeight) + (engagementScore * (1 - velocityWeight));
         let aiFactor = trend.trend_score || 50;
         // Nếu AI chấm thang điểm 10 (<= 10), quy đổi về thang điểm 100
         if (aiFactor > 0 && aiFactor <= 10) {
