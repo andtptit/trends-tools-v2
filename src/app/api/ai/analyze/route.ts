@@ -59,12 +59,16 @@ export async function POST(request: Request) {
 
     // 2. Chuyển đổi dữ liệu thành chuỗi văn bản cho Prompt
     const dataContext = rawData.map((item, index) => {
+      const hours = Math.max(1, (Date.now() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
+      const viewsPerHour = Math.round((item.views_count || 0) / hours);
+
       return `Item ${index + 1} (ID: ${item.id}):
 - Kênh: ${item.author_name} (${item.author_fans?.toLocaleString()} fans${item.author_verified ? ', Verified' : ''})
 - Content: ${item.text_content}
 - Âm nhạc: ${item.music_name || 'N/A'}
 - Định dạng: ${item.is_slideshow ? 'Slideshow' : 'Video'} (${item.video_duration}s)
-- Metrics: ${item.views_count} views, ${item.likes_count} likes, ${item.collect_count} saved
+- Metrics: ${item.views_count?.toLocaleString()} views, ${item.likes_count?.toLocaleString()} likes, ${item.collect_count?.toLocaleString()} saved
+- Tốc độ tăng trưởng: ${viewsPerHour.toLocaleString()} views/giờ (Đăng tải cách đây ${Math.round(hours)} giờ)
 `;
     }).join('\n---\n');
 

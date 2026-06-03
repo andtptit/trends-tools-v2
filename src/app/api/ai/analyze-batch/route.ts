@@ -65,12 +65,16 @@ export async function POST(request: Request) {
              ? item.transcript.substring(0, 2000) + (item.transcript.length > 2000 ? "..." : "")
              : "N/A";
 
+        const hours = Math.max(1, (Date.now() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
+        const viewsPerHour = Math.round((item.views_count || 0) / hours);
+
         return `Item ${index + 1} (ID: ${item.id}):
-- Kênh: ${item.author_name} (${item.author_fans} fans)
+- Kênh: ${item.author_name} (${item.author_fans?.toLocaleString()} fans)
 - Content: ${item.text_content}
 - Kịch bản (Script): ${safeScript}
 - Âm nhạc: ${item.music_name || 'N/A'}
-- Metrics: ${item.views_count} views, ${item.likes_count} likes, ${item.collect_count} saved
+- Metrics: ${item.views_count?.toLocaleString()} views, ${item.likes_count?.toLocaleString()} likes, ${item.collect_count?.toLocaleString()} saved
+- Tốc độ tăng trưởng: ${viewsPerHour.toLocaleString()} views/giờ (Đăng tải cách đây ${Math.round(hours)} giờ)
 `;
     }).join('\n---\n');
 
