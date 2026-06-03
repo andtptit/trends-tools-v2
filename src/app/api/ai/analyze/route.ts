@@ -149,20 +149,12 @@ ${dataContext}
                             type: Type.STRING,
                             description: "Giải thích ngắn gọn lý do vì sao nội dung này đang viral hoặc có khả năng viral mạnh"
                         },
-                        content_ideas: {
-                            type: Type.STRING,
-                            description: "Gợi ý chính xác 3 câu Hook (3 giây đầu) cực kỳ cuốn hút, kích thích sự tò mò để KOL/KOC bắt đầu video đu trend này hiệu quả (đánh số thứ tự 1, 2, 3)."
-                        },
-                        expert_commentary: {
-                            type: Type.STRING,
-                            description: "Lời bình/Nhận xét cá nhân của riêng bạn (AI) về tiềm năng thực sự của trend này. Có bền vững không? Có dễ chuyển đổi bán hàng không?"
-                        },
                         trend_score: {
                             type: Type.INTEGER,
                             description: "Điểm số đánh giá độ hot của trend từ 0 đến 100 dựa trên các Metrics"
                         }
                     },
-                    required: ["crawled_data_ids", "trend_name", "videos_count", "channels_count", "channel_stats", "viral_reason", "content_ideas", "expert_commentary", "trend_score"]
+                    required: ["crawled_data_ids", "trend_name", "videos_count", "channels_count", "channel_stats", "viral_reason", "trend_score"]
                 }
             }
         }
@@ -262,10 +254,10 @@ ${dataContext}
         ).join('\n');
 
         // Append music trend link to expert commentary
-        let expertCommentary = trend.expert_commentary || '';
+        let expertCommentary = '';
         if (topMusicId && topMusicName) {
             const musicLink = `https://www.tiktok.com/music/-${topMusicId}`;
-            expertCommentary = `${expertCommentary}\n\n🎵 <b>Âm thanh xu hướng:</b> <a href="${musicLink}">${topMusicName}</a>`;
+            expertCommentary = `🎵 <b>Âm thanh xu hướng:</b> <a href="${musicLink}">${topMusicName}</a>`;
         }
 
         const { data: newTrend, error: insertError } = await supabaseAdmin
@@ -275,13 +267,13 @@ ${dataContext}
                 related_ids: validIds, // Lưu danh sách ID đã lọc hợp lệ
                 trend_name: trend.trend_name,
                 viral_reason: trend.viral_reason,
-                content_ideas: trend.content_ideas,
+                content_ideas: null,
                 trend_score: finalTrendScore,
                 score_breakdown: scoreBreakdown,
                 videos_count: relatedItems.length || trend.videos_count,
                 channels_count: channelsCount,
                 channel_stats: channelStats,
-                expert_commentary: expertCommentary,
+                expert_commentary: expertCommentary || null,
                 category_id: category_id, // Lưu danh mục
                 status: 'pending' // Chờ Admin duyệt
             })
