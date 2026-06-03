@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
     // 0. Lấy cấu hình hệ thống
     const { data: settingsData } = await supabaseAdmin.from('system_settings').select('*');
-    let base_prompt = "Bạn là một chuyên gia nghiên cứu xu hướng (Trend Analyst) trên mạng xã hội TikTok và Facebook.\nHãy phân tích danh sách các video/bài đăng dưới đây và nhận diện các XU HƯỚNG (Trends) đang nổi lên.\nLưu ý: Có thể gộp nhiều item có nội dung hoặc chủ đề tương tự nhau thành 1 trend. Bỏ qua các item rác không có ý nghĩa.";
+    let base_prompt = "Bạn là một chuyên gia nghiên cứu xu hướng (Trend Analyst) trên mạng xã hội TikTok và Facebook.\nHãy phân tích danh sách các video/bài đăng dưới đây và nhận diện các XU HƯỚNG (Trends) đang nổi lên.\nLưu ý: Chỉ gộp các video có cùng chung một sự kiện cụ thể, cùng sử dụng một bài nhạc nền, hoặc cùng chung một kịch bản/format cụ thể thành 1 trend. Tuyệt đối không gộp chung các sự kiện khác nhau vào các chủ đề bao quát. Bỏ qua các bài đăng rác không có ý nghĩa.";
     let quantitativeWeight = 0.7;
     let velocityWeight = 0.6;
     let minViewsViral = 15000;

@@ -96,13 +96,25 @@ Bạn là chuyên gia phân tích dữ liệu mạng xã hội (Data Scientist).
 Nhiệm vụ của bạn là gộp (Reduce) danh sách các Trend thô bị trùng lặp dưới đây thành một danh sách các Trend tinh hoa duy nhất.
 
 LUẬT GỘP TREND & LỌC ĐIỀU KIỆN (BẮT BUỘC):
-1. Nhận diện các Trend trùng lặp: Nếu nhiều Trend thô nói về cùng 1 bài nhạc, cùng 1 format, hoặc cùng 1 sự kiện -> GỘP CHÚNG LẠI THÀNH 1 TREND.
-2. Cộng dồn số liệu: Khi gộp, phải gộp toàn bộ danh sách "IDs bài viết" của chúng lại với nhau (để không bị sót bài nào).
-3. Viết lại thông tin: Viết lại "Tên Trend" và "Lý do Viral" sao cho bao quát và chuyên nghiệp nhất.
-4. Lọc điều kiện tối thiểu: Sau khi bạn gộp danh sách "IDs bài viết" của các Trend trùng lặp lại, hãy kiểm tra:
-   - Trend đó phải có tổng cộng từ ${min_videos} bài viết (IDs) trở lên.
-   - Trend đó phải xuất hiện ở từ ${min_channels} kênh khác nhau trở lên (dựa trên thông tin trend thô).
-   Nếu không thỏa mãn cả hai điều kiện trên, hãy LOẠI BỎ hoàn toàn trend đó khỏi danh sách kết quả.
+1. Định nghĩa "Trùng lặp" để gộp:
+   - CHỈ gộp các Trend thô nói về cùng 1 sự việc/sự kiện cụ thể (ví dụ: cùng một vụ cháy ở xưởng mút Hương Lộ 2, cùng một vụ án mẹ kế ở Quảng Ninh, cùng một sự việc anh Hoàng dùng bình cứu hỏa cứu người ở Hải Phòng, cùng một vụ bão/sóng lớn ở thành phố Nichinan Nhật Bản).
+   - CHỈ gộp các Trend thô sử dụng chung 1 bài nhạc nền (music), cùng 1 format kịch bản (ví dụ: nhờ bố trông cá và cái kết, nắp mì tôm bói quẻ).
+   - TUYỆT ĐỐI KHÔNG được gộp các sự việc/tin tức/chủ đề khác nhau vào chung một nhóm lớn mang tên chung chung (ví dụ: KHÔNG được gom các vụ án, vụ cháy, phạt xe khách khác nhau thành một trend chung mang tên "Tin tức xã hội", "Vấn đề pháp luật", "Câu chuyện nhân văn", v.v.). Mỗi sự việc/sự kiện cụ thể phải là một Trend riêng biệt.
+
+2. Phân rã (Split) các trend thô bị gom nhóm quá rộng:
+   - Nếu trong danh sách các Trend thô đầu vào có chứa các trend bị gom nhóm quá rộng hoặc chứa nhiều sự việc khác nhau (ví dụ: 'Chuyện lạ đời/Tâm linh/Kỳ quái khó lý giải' chứa cả vụ chim lạ lẫn vụ giả chết và mì tôm; hoặc 'Tin tức xã hội' chứa cả vụ tôm chết lẫn cháy xưởng), bạn BẮT BUỘC phải phân rã (Split) chúng thành các trend cụ thể riêng biệt (ví dụ: tách thành 'Chú chim lạ đậu trên di ảnh ở Hưng Yên', 'Thanh niên giả chết để chia tay', 'Mì tôm bói quẻ Nhật Bản').
+
+3. Đặt "Tên Trend" cụ thể và chi tiết:
+   - Tên Trend phải phản ánh đúng sự việc/kịch bản cụ thể đó (ví dụ: "Hình ảnh sóng lớn dữ dội sau bão tại Nhật Bản", "Vụ cháy xưởng sản xuất mút tại Hương Lộ 2 TPHCM", "Anh hùng Hải Phòng dùng bình cứu hỏa giải cứu người phụ nữ bị đâm").
+   - Tuyệt đối không đặt tên bao quát, mơ hồ, mang tính danh mục chung chung.
+
+4. Bảo toàn và Lọc điều kiện tối thiểu:
+   - Trend sau khi gộp hoặc đứng riêng lẻ phải thỏa mãn bộ lọc:
+     * Có tổng cộng từ ${min_videos} bài viết (IDs) trở lên.
+     * Xuất hiện ở từ ${min_channels} kênh khác nhau trở lên.
+     Nếu không thỏa mãn cả hai điều kiện trên, hãy LOẠI BỎ hoàn toàn trend đó khỏi danh sách kết quả.
+   - BẮT BUỘC giữ lại toàn bộ các trend riêng biệt thỏa mãn điều kiện lọc trên, tuyệt đối không được bỏ sót, tự ý xóa bỏ hoặc ngộp chung các trend đủ điều kiện vào nhau.
+
 5. Số lượng kênh và video: Bạn không cần đếm chính xác, hệ thống sẽ tự đếm dựa trên IDs bài viết bạn trả về. Bạn chỉ cần trả về mảng crawled_data_ids chứa TẤT CẢ các ID của các video thuộc Trend đã gộp.
 
 DỮ LIỆU CÁC TREND THÔ:
