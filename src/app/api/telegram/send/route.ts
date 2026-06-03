@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 
 export async function POST(request: Request) {
   try {
-    const { trendId } = await request.json();
+    const { trendId, chatIds } = await request.json();
 
     if (!trendId) {
       return NextResponse.json({ error: 'Thiếu trendId' }, { status: 400 });
@@ -18,7 +18,11 @@ export async function POST(request: Request) {
         crawled_data (
           post_url,
           author_name,
-          views_count
+          views_count,
+          raw_json
+        ),
+        categories (
+          telegram_chat_id
         )
       `)
       .eq('id', trendId)
@@ -46,21 +50,42 @@ export async function POST(request: Request) {
         channelStatsText = `• <b>${trend.crawled_data?.author_name || 'N/A'}</b>: ${trend.crawled_data?.views_count?.toLocaleString()} view\n  👉 <a href="${trend.crawled_data?.post_url}">Xem clip</a>`;
     }
 
+    // Trích xuất Thumbnail từ crawled_data
+    let coverUrl = '';
+    const rawJson = trend.crawled_data?.raw_json;
+    if (rawJson && typeof rawJson === 'object') {
+        const anyRaw = rawJson as any;
+        coverUrl = anyRaw.videoMeta?.coverUrl || anyRaw.originalCoverUrl || anyRaw.coverUrl || '';
+    }
+
     // 3. Format tin nhắn Telegram (Fix lỗi xuống dòng từ AI)
     const fixNL = (text: string) => text ? text.replace(/\\n/g, '\n') : '';
 
     const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = process.env.TELEGRAM_CHAT_ID;
+    const categoryChatId = (trend as any).categories?.telegram_chat_id;
+    
+    // Determine which chat IDs to send to
+    let targetChatIds: string[] = [];
+    if (chatIds && Array.isArray(chatIds) && chatIds.length > 0) {
+      targetChatIds = chatIds;
+    } else {
+      const defaultChatId = categoryChatId || process.env.TELEGRAM_CHAT_ID;
+      if (defaultChatId) {
+        targetChatIds = [defaultChatId];
+      }
+    }
 
-    if (!telegramToken || !chatId) {
-       return NextResponse.json({ error: 'Chưa cấu hình Telegram Bot' }, { status: 500 });
+    if (!telegramToken || targetChatIds.length === 0) {
+       return NextResponse.json({ error: 'Chưa cấu hình Telegram Bot hoặc không có Chat ID hợp lệ' }, { status: 500 });
     }
 
     const authorName = trend.crawled_data ? trend.crawled_data.author_name : 'Unknown';
     const views = trend.crawled_data ? trend.crawled_data.views_count : 0;
 
-    const messageText = `
-🔥 <b>XU HƯỚNG MỚI: ${trend.trend_name}</b>
+    // Sử dụng thẻ <a> ẩn để chèn thumbnail mà không chiếm dụng 1024 ký tự caption của sendPhoto
+    const thumbnailHtml = coverUrl ? `<a href="${coverUrl}">&#8205;</a>` : '';
+
+    const messageText = `${thumbnailHtml}🔥 <b>XU HƯỚNG MỚI: ${trend.trend_name}</b>
 ⚡️ Độ hot: ${trend.trend_score}/100
 
 📊 <b>THỐNG KÊ 24H QUA:</b>
@@ -75,30 +100,33 @@ ${fixNL(trend.viral_reason)}
 🧐 <b>NHẬN XÉT TỪ AI CHUYÊN GIA:</b>
 ${fixNL(trend.expert_commentary)}
 
-🎯 <b>KỊCH BẢN CHO KOL:</b>
+🎯 <b>GỢI Ý HOOK 3S ĐẦU:</b>
 ${fixNL(trend.content_ideas)}
 `;
 
-    // 3. Gọi Telegram API để gửi tin
-    const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: messageText,
-        parse_mode: 'HTML',
-        disable_web_page_preview: false // Cho phép hiện hình thu nhỏ của video
-      }),
+    // Send to all target chat IDs
+    const sendPromises = targetChatIds.map(async (chatId) => {
+      const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: messageText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: false
+        }),
+      });
+      const result = await response.json();
+      if (!result.ok) {
+        throw new Error(result.description || `Lỗi gửi tin nhắn Telegram tới group ${chatId}`);
+      }
+      return result;
     });
 
-    const result = await response.json();
-
-    if (!result.ok) {
-        throw new Error(result.description || 'Lỗi gửi tin nhắn Telegram');
-    }
+    await Promise.all(sendPromises);
 
     return NextResponse.json({ message: 'Gửi Telegram thành công' });
 

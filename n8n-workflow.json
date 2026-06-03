@@ -16,7 +16,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const input = $input.all()[0].json.body || $input.all()[0].json;\n\nif (typeof $workflow !== 'undefined' && $workflow.staticData) {\n    if (!$workflow.staticData.totalTokens) $workflow.staticData.totalTokens = 0;\n}\n\nreturn [\n  {\n    json: {\n      item_ids: input.item_ids || [],\n      category_id: input.category_id,\n      log_id: input.log_id,\n      app_url: 'https://trends-tools-v2.vercel.app'\n    }\n  }\n];"
+        "jsCode": "const input = $input.all()[0].json.body || $input.all()[0].json;\n\nif (typeof $workflow !== 'undefined' && $workflow.staticData) {\n    $workflow.staticData.totalTokens = 0; // Reset token về 0 cho phiên mới\n}\n\nreturn [\n  {\n    json: {\n      item_ids: input.item_ids || [],\n      category_id: input.category_id,\n      log_id: input.log_id,\n      app_url: 'https://trends-tools-v2.vercel.app'\n    }\n  }\n];"
       },
       "id": "code-init",
       "name": "Khởi tạo Data",
@@ -49,7 +49,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const items = $input.all();\nif (items.length === 0) return [];\nconst item_ids = items.map(e => e.json.item_ids).filter(Boolean);\nreturn [{\n    json: {\n        item_ids: item_ids,\n        category_id: items[0].json.category_id,\n        log_id: items[0].json.log_id,\n        app_url: items[0].json.app_url\n    }\n}];"
+        "jsCode": "const items = $input.all();\nif (items.length === 0) return [];\nconst item_ids = items.map(e => e.json.item_ids).filter(Boolean);\nreturn [{\n    json: {\n        item_ids: item_ids\n    }\n}];"
       },
       "id": "group-batch",
       "name": "Gom Lô để gọi API",
@@ -60,7 +60,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $json.app_url }}/api/ai/analyze-batch",
+        "url": "={{ $('Khởi tạo Data').first().json.app_url }}/api/ai/analyze-batch",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -70,11 +70,11 @@
             },
             {
               "name": "category_id",
-              "value": "={{ $json.category_id }}"
+              "value": "={{ $('Khởi tạo Data').first().json.category_id }}"
             },
             {
               "name": "log_id",
-              "value": "={{ $json.log_id }}"
+              "value": "={{ $('Khởi tạo Data').first().json.log_id }}"
             },
             {
               "name": "is_final_batch",
@@ -99,7 +99,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const response = $input.all()[0].json;\nif (typeof $workflow !== 'undefined' && $workflow.staticData) {\n    $workflow.staticData.totalTokens = ($workflow.staticData.totalTokens || 0) + (response.tokens_used || 0);\n    if ($node['Lặp từng lô (15 bài)'].context.noItemsLeft) {\n        $workflow.staticData.totalTokens = 0;\n    }\n}\nreturn $input.all();"
+        "jsCode": "const response = $input.all()[0].json;\nif (typeof $workflow !== 'undefined' && $workflow.staticData) {\n    $workflow.staticData.totalTokens = ($workflow.staticData.totalTokens || 0) + (response.tokens_used || 0);\n}\nreturn $input.all();"
       },
       "id": "accumulate-tokens",
       "name": "Cộng dồn Token",
@@ -110,7 +110,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const items = $input.all();\nif (items.length === 0) return [];\nreturn [{\n    json: {\n        log_id: items[0].json.log_id,\n        category_id: items[0].json.category_id,\n        app_url: items[0].json.app_url\n    }\n}];"
+        "jsCode": "return [{\n    json: {\n        done: true\n    }\n}];"
       },
       "id": "group-reduce",
       "name": "Gom Kết Quả để Reduce",
@@ -121,17 +121,17 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $json.app_url }}/api/ai/reduce-trends",
+        "url": "={{ $('Khởi tạo Data').first().json.app_url }}/api/ai/reduce-trends",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
               "name": "log_id",
-              "value": "={{ $json.log_id }}"
+              "value": "={{ $('Khởi tạo Data').first().json.log_id }}"
             },
             {
               "name": "category_id",
-              "value": "={{ $json.category_id }}"
+              "value": "={{ $('Khởi tạo Data').first().json.category_id }}"
             },
             {
               "name": "accumulated_tokens",

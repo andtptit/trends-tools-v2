@@ -14,6 +14,7 @@ import { Edit2, Trash2 } from "lucide-react";
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<any[]>([]);
+  const [telegramGroups, setTelegramGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,12 +26,19 @@ export default function CategoriesPage() {
   const [customPrompt, setCustomPrompt] = useState("");
   const [minVideos, setMinVideos] = useState("1");
   const [minChannels, setMinChannels] = useState("1");
+  const [telegramChatId, setTelegramChatId] = useState("");
 
   const supabase = createClient();
 
   useEffect(() => {
     fetchCategories();
+    fetchTelegramGroups();
   }, []);
+
+  const fetchTelegramGroups = async () => {
+    const { data } = await supabase.from('telegram_groups').select('chat_id, group_name');
+    if (data) setTelegramGroups(data);
+  };
 
   const fetchCategories = async () => {
     setLoading(true);
@@ -54,6 +62,7 @@ export default function CategoriesPage() {
     setCustomPrompt("Bạn là một chuyên gia phân tích dữ liệu mạng xã hội. Hãy tìm ra các xu hướng (trend) nổi bật nhất từ danh sách video sau...");
     setMinVideos("1");
     setMinChannels("1");
+    setTelegramChatId("");
     setIsModalOpen(true);
   }
 
@@ -64,6 +73,7 @@ export default function CategoriesPage() {
     setCustomPrompt(cat.custom_prompt || "");
     setMinVideos(cat.min_videos?.toString() || "1");
     setMinChannels(cat.min_channels?.toString() || "1");
+    setTelegramChatId(cat.telegram_chat_id || "");
     setIsModalOpen(true);
   }
 
@@ -74,7 +84,7 @@ export default function CategoriesPage() {
       .from('categories')
       .delete()
       .eq('id', id);
-
+ 
     if (error) {
       toast.error("Lỗi khi xoá: " + error.message);
     } else {
@@ -96,7 +106,8 @@ export default function CategoriesPage() {
       description, 
       custom_prompt: customPrompt,
       min_videos: parseInt(minVideos) || 1,
-      min_channels: parseInt(minChannels) || 1
+      min_channels: parseInt(minChannels) || 1,
+      telegram_chat_id: telegramChatId || null
     };
 
     let error;
@@ -142,12 +153,13 @@ export default function CategoriesPage() {
                 <TableHead>Tên Niche</TableHead>
                 <TableHead>Cấu hình Trend</TableHead>
                 <TableHead>Prompt riêng</TableHead>
+                <TableHead>Telegram Chat ID</TableHead>
                 <TableHead className="text-right">Hành động</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {categories.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="text-center py-6 text-gray-500">Chưa có danh mục nào.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center py-6 text-gray-500">Chưa có danh mục nào.</TableCell></TableRow>
               ) : categories.map((cat) => (
                 <TableRow key={cat.id}>
                   <TableCell className="font-medium">
@@ -162,6 +174,13 @@ export default function CategoriesPage() {
                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Có Prompt</span>
                     ) : (
                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Mặc định</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {cat.telegram_chat_id ? (
+                      <span className="text-xs bg-blue-550 text-blue-700 font-mono font-medium px-2 py-1 bg-blue-50 border border-blue-100 rounded">{cat.telegram_chat_id}</span>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">Mặc định</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right space-x-2">
@@ -202,6 +221,24 @@ export default function CategoriesPage() {
                  <Label>Số Kênh tối thiểu</Label>
                  <Input type="number" value={minChannels} onChange={(e) => setMinChannels(e.target.value)} />
                </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Nhóm Telegram nhận thông báo (Tùy chọn)</Label>
+              <select 
+                value={telegramChatId} 
+                onChange={(e) => setTelegramChatId(e.target.value)} 
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">-- Dùng Telegram Mặc định --</option>
+                {telegramGroups.map(g => (
+                  <option key={g.chat_id} value={g.chat_id}>
+                    {g.group_name} ({g.chat_id})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500">
+                Bạn có thể thêm nhóm mới ở menu <b>Nhóm Telegram</b>.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Custom Prompt (Hướng dẫn AI phân tích theo phong cách riêng)</Label>

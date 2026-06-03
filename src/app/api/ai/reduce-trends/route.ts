@@ -21,7 +21,19 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { log_id, category_id, accumulated_tokens = 0 } = body;
-    logId = log_id;
+    // 0. Lấy cấu hình hệ thống
+    const { data: settingsData } = await supabaseAdmin.from('system_settings').select('*');
+    let quantitativeWeight = 0.7;
+    let velocityWeight = 0.6;
+    let minViewsViral = 15000;
+    
+    if (settingsData) {
+        settingsData.forEach(setting => {
+            if (setting.key === 'trend_score_quantitative_weight') quantitativeWeight = parseFloat(setting.value) / 100;
+            if (setting.key === 'trend_score_velocity_weight') velocityWeight = parseFloat(setting.value) / 100;
+            if (setting.key === 'trend_score_min_views_viral') minViewsViral = parseFloat(setting.value);
+        });
+    }
 
     // 1. Fetch all pending trends for this category
     let query = supabaseAdmin.from('trends').select('*').eq('status', 'pending');
@@ -86,7 +98,10 @@ ${trendsContext}
                         crawled_data_ids: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Gộp toàn bộ ID của các video thuộc trend này" },
                         trend_name: { type: Type.STRING },
                         viral_reason: { type: Type.STRING },
-                        content_ideas: { type: Type.STRING },
+                        content_ideas: { 
+                            type: Type.STRING, 
+                            description: "Gợi ý chính xác 3 câu Hook (3 giây đầu) cực kỳ cuốn hút, kích thích sự tò mò để KOL/KOC bắt đầu video đu trend này hiệu quả (đánh số thứ tự 1, 2, 3)."
+                        },
                         expert_commentary: { type: Type.STRING },
                         trend_score: { type: Type.INTEGER }
                     },
@@ -117,17 +132,86 @@ ${trendsContext}
         const uniqueIds = [...new Set(trend.crawled_data_ids)];
         const mainDataId = uniqueIds[0];
 
+        // Truy vấn dữ liệu thực tế từ database để tính điểm định lượng cho trend tinh
+        const { data: relatedItems } = await supabaseAdmin
+            .from('crawled_data')
+            .select('author_name, author_username, views_count, likes_count, comments_count, shares_count, collect_count, music_id, music_name, posted_at')
+            .in('id', uniqueIds);
+
+        let totalViews = 0;
+        let totalEngagement = 0;
+        let velocitySum = 0;
+        const uniqueChannels = new Set<string>();
+        const musicMap: Record<string, { name: string, count: number }> = {};
+        let topMusicId = '';
+        let topMusicName = '';
+        let maxMusicCount = 0;
+
+        if (relatedItems && relatedItems.length > 0) {
+            relatedItems.forEach((item: any) => {
+                totalViews += item.views_count || 0;
+                totalEngagement += (item.likes_count || 0) + (item.comments_count || 0) + (item.shares_count || 0) + (item.collect_count || 0);
+                
+                const channelKey = item.author_username || item.author_name || 'Unknown';
+                uniqueChannels.add(channelKey);
+
+                const hours = Math.max(1, (Date.now() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
+                velocitySum += (item.views_count || 0) / hours;
+
+                if (item.music_id && item.music_name) {
+                    if (!musicMap[item.music_id]) {
+                        musicMap[item.music_id] = { name: item.music_name, count: 0 };
+                    }
+                    musicMap[item.music_id].count++;
+                    if (musicMap[item.music_id].count > maxMusicCount) {
+                        maxMusicCount = musicMap[item.music_id].count;
+                        topMusicId = item.music_id;
+                        topMusicName = item.music_name;
+                    }
+                }
+            });
+        }
+
+        const avgVelocity = (relatedItems && relatedItems.length > 0) ? (velocitySum / relatedItems.length) : 0;
+        const velocityScore = Math.min(100, (avgVelocity / minViewsViral) * 100);
+
+        const avgEngagementRate = totalViews > 0 ? (totalEngagement / totalViews) : 0;
+        const engagementScore = Math.min(100, (avgEngagementRate / 0.15) * 100);
+
+        const quantitativeScore = (velocityScore * velocityWeight) + (engagementScore * (1 - velocityWeight));
+        const aiFactor = trend.trend_score || 50;
+
+        const finalTrendScore = Math.max(0, Math.min(100, Math.round(
+            (quantitativeScore * quantitativeWeight) + (aiFactor * (1 - quantitativeWeight))
+        )));
+
+        const channelsCount = uniqueChannels.size || 1;
+
+        // Build actual channel stats
+        const channelStats = (relatedItems && relatedItems.length > 0)
+            ? relatedItems.map((item: any) => 
+                `- Kênh ${item.author_name || item.author_username}: ${(item.views_count || 0).toLocaleString()} views | ${(item.likes_count || 0).toLocaleString()} likes`
+              ).join('\n')
+            : 'N/A';
+
+        // Append music trend link to expert commentary
+        let expertCommentary = trend.expert_commentary || '';
+        if (topMusicId && topMusicName) {
+            const musicLink = `https://www.tiktok.com/music/-${topMusicId}`;
+            expertCommentary = `${expertCommentary}\n\n🎵 <b>Âm thanh xu hướng:</b> <a href="${musicLink}">${topMusicName}</a>`;
+        }
+
         const { error: insertError } = await supabaseAdmin.from('trends').insert({
             crawled_data_id: mainDataId,
             related_ids: uniqueIds,
             trend_name: trend.trend_name,
             viral_reason: trend.viral_reason,
             content_ideas: trend.content_ideas,
-            trend_score: trend.trend_score,
+            trend_score: finalTrendScore,
             videos_count: uniqueIds.length,
-            channels_count: 1, // Will be updated correctly by UI later if needed, or we just put 1
-            channel_stats: 'N/A',
-            expert_commentary: trend.expert_commentary,
+            channels_count: channelsCount,
+            channel_stats: channelStats,
+            expert_commentary: expertCommentary,
             category_id: category_id === 'all' ? null : category_id,
             status: 'pending'
         });
@@ -137,12 +221,19 @@ ${trendsContext}
     // 6. Update Log
     const totalTokens = accumulated_tokens + tokensUsed;
     if (log_id) {
-        const { data: currentLog } = await supabaseAdmin.from('ai_logs').select('items_analyzed').eq('id', log_id).single();
+        const { data: currentLog } = await supabaseAdmin.from('ai_logs').select('items_analyzed, prompt_used, response_raw').eq('id', log_id).single();
         const finalItems = currentLog ? currentLog.items_analyzed : 0;
+        const existingPrompt = currentLog?.prompt_used || '';
+        const existingResponse = currentLog?.response_raw || '';
         
+        const newPromptUsed = `${existingPrompt}\n\n=========================================\n=== BƯỚC HỢP NHẤT TRENDS (REDUCE) ===\n=========================================\n${prompt}`;
+        
+        const newResponseRaw = `${existingResponse}\n\n=========================================\n=== PHẢN HỒI HỢP NHẤT (REDUCE Raw JSON) ===\n=========================================\n${responseText}\n\n=========================================\n=== TỔNG KẾT TIẾN TRÌNH ===\n=========================================\n- Tổng bài phân tích: ${finalItems}\n- Lọc rác và Gộp lại còn: ${insertedCount} Trends tinh hoa.\n- Xóa ${rawTrends.length} Trends trùng lặp.\n📊 Tổng Tokens đã dùng: ${totalTokens.toLocaleString()}`;
+
         await supabaseAdmin.from('ai_logs').update({
             trends_found: insertedCount,
-            response_raw: `✅ Hoàn tất toàn bộ tiến trình (Map-Reduce)!\n\n- Tổng bài phân tích: ${finalItems}\n- Lọc rác và Gộp lại còn: ${insertedCount} Trends tinh hoa.\n- Xóa ${rawTrends.length} Trends rác/trùng lặp.\n\n📊 Tổng Tokens: ${totalTokens.toLocaleString()}`,
+            prompt_used: newPromptUsed,
+            response_raw: newResponseRaw,
             status: 'success'
         }).eq('id', log_id);
     }

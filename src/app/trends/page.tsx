@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Users, Video, BarChart2, Lightbulb, Flame, BrainCircuit, Trash2, Activity } from "lucide-react";
+import { Users, Video, BarChart2, Lightbulb, Flame, BrainCircuit, Trash2, Activity, Send } from "lucide-react";
 
 export default function TrendsPage() {
   const [trends, setTrends] = useState<any[]>([]);
@@ -20,11 +20,20 @@ export default function TrendsPage() {
   const [previewTrend, setPreviewTrend] = useState<any | null>(null);
   const [previewContent, setPreviewContent] = useState<string>("");
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [telegramGroups, setTelegramGroups] = useState<any[]>([]);
+  const [selectedGroupChatIds, setSelectedGroupChatIds] = useState<string[]>([]);
+  const [previewAction, setPreviewAction] = useState<'approve' | 'resend'>('approve');
   const supabase = createClient();
 
   useEffect(() => {
     fetchTrends();
+    fetchTelegramGroups();
   }, []);
+
+  const fetchTelegramGroups = async () => {
+    const { data } = await supabase.from('telegram_groups').select('chat_id, group_name');
+    if (data) setTelegramGroups(data);
+  };
 
   const fetchTrends = async () => {
     setLoading(true);
@@ -61,7 +70,23 @@ export default function TrendsPage() {
     }
   };
 
-  const updateStatus = async (id: string, newStatus: string) => {
+  const handleResend = async (id: string, chatIds: string[]) => {
+    toast.info("Đang gửi lại thông báo lên Telegram...");
+    try {
+      const res = await fetch('/api/telegram/send', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trendId: id, chatIds }) 
+      });
+      const data = await res.json();
+      if (data.error) toast.error("Lỗi gửi Telegram: " + data.error);
+      else toast.success("Đã gửi Telegram thành công!");
+    } catch (e) {
+      toast.error("Lỗi gọi API Telegram");
+    }
+  };
+
+  const updateStatus = async (id: string, newStatus: string, chatIds?: string[]) => {
     const { error } = await supabase
       .from('trends')
       .update({ status: newStatus })
@@ -77,7 +102,7 @@ export default function TrendsPage() {
         fetch('/api/telegram/send', { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ trendId: id }) 
+            body: JSON.stringify({ trendId: id, chatIds }) 
         }).then(res => res.json()).then(data => {
             if (data.error) toast.error("Lỗi gửi Telegram: " + data.error);
             else toast.success("Đã gửi Telegram thành công!");
@@ -86,10 +111,18 @@ export default function TrendsPage() {
     }
   };
 
-  const openPreviewModal = async (trend: any) => {
+  const openPreviewModal = async (trend: any, action: 'approve' | 'resend') => {
     setPreviewTrend(trend);
+    setPreviewAction(action);
     setPreviewContent("");
     setIsPreviewLoading(true);
+
+    const nicheChatId = trend.categories?.telegram_chat_id;
+    if (nicheChatId) {
+      setSelectedGroupChatIds([nicheChatId]);
+    } else {
+      setSelectedGroupChatIds([]);
+    }
     
     try {
       // Fetch related videos to build the full preview
@@ -127,7 +160,7 @@ ${fixNL(trend.viral_reason)}
 🧐 <b>NHẬN XÉT TỪ AI CHUYÊN GIA:</b>
 ${fixNL(trend.expert_commentary)}
 
-🎯 <b>KỊCH BẢN CHO KOL:</b>
+🎯 <b>GỢI Ý HOOK 3S ĐẦU:</b>
 ${fixNL(trend.content_ideas)}`;
 
       setPreviewContent(content);
@@ -281,9 +314,20 @@ ${fixNL(trend.content_ideas)}`;
                     <div className="flex justify-end items-center gap-2">
                       {trend.status === 'pending' && (
                         <>
-                          <Button size="sm" variant="default" className="h-8 bg-green-600 hover:bg-green-700" onClick={() => openPreviewModal(trend)}>Duyệt</Button>
+                          <Button size="sm" variant="default" className="h-8 bg-green-600 hover:bg-green-700" onClick={() => openPreviewModal(trend, 'approve')}>Duyệt</Button>
                           <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-200 hover:bg-red-50" onClick={() => updateStatus(trend.id, 'rejected')}>Bỏ qua</Button>
                         </>
+                      )}
+                      {trend.status === 'approved' && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="h-8 w-8 text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100"
+                          title="Gửi lại Telegram"
+                          onClick={(e) => { e.stopPropagation(); openPreviewModal(trend, 'resend'); }}
+                        >
+                           <Send className="w-4 h-4" />
+                        </Button>
                       )}
                       <Button 
                           variant="ghost" 
@@ -342,13 +386,13 @@ ${fixNL(trend.content_ideas)}`;
             )}
 
             <div>
-              <h4 className="font-semibold text-gray-900 mb-1 flex items-center gap-2"><Lightbulb className="w-4 h-4 text-yellow-500"/> Ý tưởng Content cho KOL</h4>
+              <h4 className="font-semibold text-gray-900 mb-1 flex items-center gap-2"><Lightbulb className="w-4 h-4 text-yellow-500"/> Gợi ý Hook 3s đầu cho Video</h4>
               <p className="text-gray-700 bg-gray-50 p-4 rounded-md border text-sm whitespace-pre-wrap">{selectedTrend?.content_ideas}</p>
             </div>
             <div className="flex justify-end gap-2 pt-4 border-t">
                {selectedTrend?.status === 'pending' && (
                   <>
-                    <Button variant="default" onClick={() => { updateStatus(selectedTrend.id, 'approved'); setSelectedTrend(null); }}>Duyệt ngay</Button>
+                    <Button variant="default" onClick={() => { openPreviewModal(selectedTrend, 'approve'); setSelectedTrend(null); }}>Duyệt</Button>
                     <Button variant="destructive" onClick={() => { updateStatus(selectedTrend.id, 'rejected'); setSelectedTrend(null); }}>Từ chối</Button>
                   </>
                )}
@@ -367,8 +411,8 @@ ${fixNL(trend.content_ideas)}`;
                 Xem trước tin nhắn Telegram
             </DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <div className="bg-slate-900 text-white p-6 rounded-xl font-mono text-[13px] leading-relaxed max-h-[500px] overflow-y-auto shadow-inner border border-slate-800">
+          <div className="py-4 space-y-4">
+            <div className="bg-slate-900 text-white p-6 rounded-xl font-mono text-[13px] leading-relaxed max-h-[400px] overflow-y-auto shadow-inner border border-slate-800">
                {isPreviewLoading ? (
                  <div className="flex flex-col items-center justify-center py-12 gap-3">
                     <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -378,7 +422,35 @@ ${fixNL(trend.content_ideas)}`;
                  <div dangerouslySetInnerHTML={{ __html: previewContent.replace(/\n/g, '<br/>') }} />
                )}
             </div>
-            <p className="mt-4 text-xs text-gray-500 italic flex items-center gap-2">
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-900">Gửi đến các nhóm Telegram:</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto border p-3 rounded-lg bg-gray-50">
+                {telegramGroups.length === 0 ? (
+                  <p className="text-xs text-gray-500 italic col-span-2">Chưa cấu hình nhóm Telegram nào. Hãy cấu hình ở mục Nhóm Telegram.</p>
+                ) : (
+                  telegramGroups.map((g) => (
+                    <label key={g.chat_id} className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedGroupChatIds.includes(g.chat_id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedGroupChatIds([...selectedGroupChatIds, g.chat_id]);
+                          } else {
+                            setSelectedGroupChatIds(selectedGroupChatIds.filter(id => id !== g.chat_id));
+                          }
+                        }}
+                        className="w-4 h-4 cursor-pointer rounded"
+                      />
+                      <span>{g.group_name}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-500 italic flex items-center gap-2">
                 <Lightbulb className="w-3 h-3" />
                 Mẹo: Bạn nên kiểm tra kỹ các link video trước khi duyệt để đảm bảo chất lượng tin nhắn.
             </p>
@@ -388,12 +460,16 @@ ${fixNL(trend.content_ideas)}`;
              <Button 
                 variant="default" 
                 className="bg-green-600 hover:bg-green-700"
-                onClick={() => {
-                   updateStatus(previewTrend.id, 'approved');
+                onClick={async () => {
+                   if (previewAction === 'approve') {
+                     await updateStatus(previewTrend.id, 'approved', selectedGroupChatIds);
+                   } else {
+                     await handleResend(previewTrend.id, selectedGroupChatIds);
+                   }
                    setPreviewTrend(null);
                 }}
              >
-                Xác nhận & Gửi Telegram
+                {previewAction === 'approve' ? 'Xác nhận & Gửi Telegram' : 'Gửi lại Telegram'}
              </Button>
           </div>
         </DialogContent>

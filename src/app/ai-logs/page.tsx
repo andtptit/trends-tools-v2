@@ -140,6 +140,17 @@ export default function AILogsPage() {
                 </div>
              </div>
 
+             {selectedLog?.response_raw && (
+                <div>
+                   <h4 className="font-semibold mb-2 text-green-600">Phản hồi từ Gemini (Raw JSON):</h4>
+                   <div className="bg-slate-900 text-slate-100 p-4 rounded-md text-xs font-mono whitespace-pre-wrap max-h-80 overflow-y-auto">
+                      {typeof selectedLog.response_raw === 'string' 
+                         ? selectedLog.response_raw 
+                         : JSON.stringify(selectedLog.response_raw, null, 2)}
+                   </div>
+                </div>
+             )}
+
              {selectedLog?.error_message && (
                 <div>
                    <h4 className="font-semibold mb-2 text-red-600">Chi tiết Lỗi:</h4>

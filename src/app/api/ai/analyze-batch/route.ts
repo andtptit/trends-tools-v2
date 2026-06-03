@@ -116,7 +116,10 @@ ${dataContext}
                         channels_count: { type: Type.INTEGER },
                         channel_stats: { type: Type.STRING },
                         viral_reason: { type: Type.STRING },
-                        content_ideas: { type: Type.STRING },
+                        content_ideas: { 
+                            type: Type.STRING, 
+                            description: "Gợi ý chính xác 3 câu Hook (3 giây đầu) cực kỳ cuốn hút, kích thích sự tò mò để KOL/KOC bắt đầu video đu trend này hiệu quả (đánh số thứ tự 1, 2, 3)."
+                        },
                         expert_commentary: { type: Type.STRING },
                         trend_score: { type: Type.INTEGER }
                     },
@@ -163,7 +166,7 @@ ${dataContext}
         console.log(`[DEBUG] Updating log_id: ${log_id}`);
         console.log(`[DEBUG] Using key starting with: ${serviceKey?.substring(0, 15)}... Is it Anon? ${serviceKey === process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`);
         
-        const { data: currentLog, error: selectError } = await supabaseAdmin.from('ai_logs').select('items_analyzed, trends_found').eq('id', log_id).single();
+        const { data: currentLog, error: selectError } = await supabaseAdmin.from('ai_logs').select('items_analyzed, trends_found, prompt_used, response_raw').eq('id', log_id).single();
         console.log(`[DEBUG] currentLog:`, currentLog, `Error:`, selectError);
         
         if (currentLog) {
@@ -171,13 +174,24 @@ ${dataContext}
             const newTrends = (currentLog.trends_found || 0) + newTrendsCount;
             const newTokens = accumulated_tokens + tokensUsed;
             
+            const existingPrompt = currentLog.prompt_used || '';
+            const existingResponse = currentLog.response_raw || '';
+            
+            const batchNum = existingPrompt ? (existingPrompt.split('=== LÔ').length) : 1;
+            
+            const newPromptUsed = existingPrompt 
+              ? `${existingPrompt}\n\n=========================================\n=== LÔ PHÂN TÍCH THỨ ${batchNum} ===\n=========================================\n${prompt}`
+              : `=========================================\n=== LÔ PHÂN TÍCH THỨ 1 ===\n=========================================\n${prompt}`;
+              
+            const newResponseRaw = (existingResponse && !existingResponse.startsWith('Đang bắt đầu'))
+              ? `${existingResponse}\n\n=========================================\n=== PHẢN HỒI LÔ THỨ ${batchNum} (Raw JSON) ===\n=========================================\n${responseText}`
+              : `=========================================\n=== PHẢN HỒI LÔ THỨ 1 (Raw JSON) ===\n=========================================\n${responseText}`;
+
             const { error: updateError } = await supabaseAdmin.from('ai_logs').update({
                 items_analyzed: newItems,
                 trends_found: newTrends,
-                prompt_used: base_prompt,
-                response_raw: is_final_batch 
-                    ? `⏳ Đang chuẩn bị hợp nhất dữ liệu (Map-Reduce)... Đã phân tích ${newItems} bài, tìm thấy ${newTrends} trends thô.\n\n📊 Tổng Tokens: ${newTokens.toLocaleString()}` 
-                    : `⏳ Đang xử lý lô... Đã phân tích ${newItems} bài, tìm thấy ${newTrends} trends thô.\n\n📊 Tokens tích lũy: ${newTokens.toLocaleString()}`,
+                prompt_used: newPromptUsed,
+                response_raw: newResponseRaw,
                 status: 'processing'
             }).eq('id', log_id);
             

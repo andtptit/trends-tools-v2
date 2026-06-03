@@ -15,7 +15,10 @@ export default function SettingsPage() {
     crawl_limit: "5",
     actor_tiktok_profile: "clockworks/tiktok-profile",
     actor_tiktok_scraper: "clockworks/tiktok-scraper",
-    base_ai_prompt: "Bạn là một chuyên gia phân tích dữ liệu mạng xã hội và nghiên cứu xu hướng (Trend Analyst). Hãy khắt khe trong việc đánh giá và đưa ra kịch bản thật viral."
+    base_ai_prompt: "Bạn là một chuyên gia phân tích dữ liệu mạng xã hội và nghiên cứu xu hướng (Trend Analyst). Hãy khắt khe trong việc đánh giá và đưa ra kịch bản thật viral.",
+    trend_score_quantitative_weight: "70",
+    trend_score_velocity_weight: "60",
+    trend_score_min_views_viral: "15000"
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -119,6 +122,51 @@ export default function SettingsPage() {
               <p className="font-semibold mb-1">Mẹo nhỏ:</p>
               <p>Nếu bạn gặp lỗi "Actor with this name was not found", có thể Actor đó đã bị đổi tên hoặc xóa trên Apify Store. Bạn có thể tìm ID mới tại <a href="https://apify.com/store" target="_blank" className="underline font-bold">Apify Store</a> và cập nhật vào đây.</p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Save className="w-5 h-5 text-blue-600"/> Cấu hình thuật toán Trend Score 2.0</CardTitle>
+          <CardDescription>Tùy biến trọng số tính điểm và ngưỡng đột biến cho xu hướng.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="quantitative_weight">Tỷ trọng Điểm định lượng (%)</Label>
+              <Input 
+                id="quantitative_weight" 
+                type="number"
+                min="0"
+                max="100"
+                value={settings.trend_score_quantitative_weight} 
+                onChange={(e) => updateSetting('trend_score_quantitative_weight', e.target.value)} 
+              />
+              <p className="text-xs text-gray-500">Tỷ trọng còn lại ({100 - (parseInt(settings.trend_score_quantitative_weight) || 0)}%) sẽ thuộc về điểm định tính từ AI.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="velocity_weight">Tỷ trọng Tốc độ lan truyền trong điểm định lượng (%)</Label>
+              <Input 
+                id="velocity_weight" 
+                type="number"
+                min="0"
+                max="100"
+                value={settings.trend_score_velocity_weight} 
+                onChange={(e) => updateSetting('trend_score_velocity_weight', e.target.value)} 
+              />
+              <p className="text-xs text-gray-500">Tỷ trọng còn lại ({100 - (parseInt(settings.trend_score_velocity_weight) || 0)}%) thuộc về Tỷ lệ tương tác.</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="min_views_viral">Lượt xem/giờ để coi là cực nóng (100 điểm Tốc độ)</Label>
+            <Input 
+              id="min_views_viral" 
+              type="number"
+              value={settings.trend_score_min_views_viral} 
+              onChange={(e) => updateSetting('trend_score_min_views_viral', e.target.value)} 
+            />
+            <p className="text-xs text-gray-500">Số lượt xem trung bình mỗi giờ đạt mốc này sẽ được quy đổi thành 100 điểm thành phần Tốc độ.</p>
           </div>
         </CardContent>
       </Card>

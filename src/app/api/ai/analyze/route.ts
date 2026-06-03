@@ -19,10 +19,16 @@ export async function POST(request: Request) {
     // 0. Lấy cấu hình hệ thống
     const { data: settingsData } = await supabaseAdmin.from('system_settings').select('*');
     let base_prompt = "Bạn là một chuyên gia nghiên cứu xu hướng (Trend Analyst) trên mạng xã hội TikTok và Facebook.\nHãy phân tích danh sách các video/bài đăng dưới đây và nhận diện các XU HƯỚNG (Trends) đang nổi lên.\nLưu ý: Có thể gộp nhiều item có nội dung hoặc chủ đề tương tự nhau thành 1 trend. Bỏ qua các item rác không có ý nghĩa.";
+    let quantitativeWeight = 0.7;
+    let velocityWeight = 0.6;
+    let minViewsViral = 15000;
     
     if (settingsData) {
         settingsData.forEach(setting => {
             if (setting.key === 'base_ai_prompt') base_prompt = setting.value;
+            if (setting.key === 'trend_score_quantitative_weight') quantitativeWeight = parseFloat(setting.value) / 100;
+            if (setting.key === 'trend_score_velocity_weight') velocityWeight = parseFloat(setting.value) / 100;
+            if (setting.key === 'trend_score_min_views_viral') minViewsViral = parseFloat(setting.value);
         });
     }
 
@@ -33,12 +39,15 @@ export async function POST(request: Request) {
     // 1. Lấy dữ liệu chưa phân tích từ database
     let query = supabaseAdmin
       .from('crawled_data')
-      .select('id, author_name, author_fans, author_verified, text_content, views_count, likes_count, collect_count, music_name, video_duration, is_slideshow');
+      .select('id, author_name, author_username, author_fans, author_verified, text_content, views_count, likes_count, comments_count, shares_count, collect_count, music_id, music_name, video_duration, is_slideshow, posted_at');
       
     if (item_ids.length > 0) {
         query = query.in('id', item_ids);
     } else {
-        query = query.eq('is_analyzed', false).limit(50);
+        const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        query = query.eq('is_analyzed', false)
+                     .gt('posted_at', fortyEightHoursAgo)
+                     .limit(50);
     }
 
     const { data: rawData, error: fetchError } = await query;
@@ -128,7 +137,7 @@ ${dataContext}
                         },
                         content_ideas: {
                             type: Type.STRING,
-                            description: "Gợi ý 2-3 ý tưởng kịch bản hoặc góc nhìn để KOL/KOC có thể 'đu' trend này hiệu quả"
+                            description: "Gợi ý chính xác 3 câu Hook (3 giây đầu) cực kỳ cuốn hút, kích thích sự tò mò để KOL/KOC bắt đầu video đu trend này hiệu quả (đánh số thứ tự 1, 2, 3)."
                         },
                         expert_commentary: {
                             type: Type.STRING,
@@ -162,6 +171,68 @@ ${dataContext}
 
         if (!mainDataId) continue;
 
+        // Trích xuất video liên quan để tính điểm định lượng
+        const relatedItems = rawData.filter((item: any) => trend.crawled_data_ids.includes(item.id));
+        
+        let totalViews = 0;
+        let totalEngagement = 0;
+        let velocitySum = 0;
+        const uniqueChannels = new Set<string>();
+        const musicMap: Record<string, { name: string, count: number }> = {};
+        let topMusicId = '';
+        let topMusicName = '';
+        let maxMusicCount = 0;
+
+        relatedItems.forEach((item: any) => {
+            totalViews += item.views_count || 0;
+            totalEngagement += (item.likes_count || 0) + (item.comments_count || 0) + (item.shares_count || 0) + (item.collect_count || 0);
+            
+            const channelKey = item.author_username || item.author_name || 'Unknown';
+            uniqueChannels.add(channelKey);
+
+            const hours = Math.max(1, (Date.now() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
+            velocitySum += (item.views_count || 0) / hours;
+
+            if (item.music_id && item.music_name) {
+                if (!musicMap[item.music_id]) {
+                    musicMap[item.music_id] = { name: item.music_name, count: 0 };
+                }
+                musicMap[item.music_id].count++;
+                if (musicMap[item.music_id].count > maxMusicCount) {
+                    maxMusicCount = musicMap[item.music_id].count;
+                    topMusicId = item.music_id;
+                    topMusicName = item.music_name;
+                }
+            }
+        });
+
+        const avgVelocity = relatedItems.length > 0 ? (velocitySum / relatedItems.length) : 0;
+        const velocityScore = Math.min(100, (avgVelocity / minViewsViral) * 100);
+
+        const avgEngagementRate = totalViews > 0 ? (totalEngagement / totalViews) : 0;
+        const engagementScore = Math.min(100, (avgEngagementRate / 0.15) * 100); // 15% rate is 100 points
+
+        const quantitativeScore = (velocityScore * velocityWeight) + (engagementScore * (1 - velocityWeight));
+        const aiFactor = trend.trend_score || 50;
+
+        const finalTrendScore = Math.max(0, Math.min(100, Math.round(
+            (quantitativeScore * quantitativeWeight) + (aiFactor * (1 - quantitativeWeight))
+        )));
+
+        const channelsCount = uniqueChannels.size || 1;
+
+        // Build actual channel stats
+        const channelStats = relatedItems.map((item: any) => 
+            `- Kênh ${item.author_name || item.author_username}: ${(item.views_count || 0).toLocaleString()} views | ${(item.likes_count || 0).toLocaleString()} likes`
+        ).join('\n');
+
+        // Append music trend link to expert commentary
+        let expertCommentary = trend.expert_commentary || '';
+        if (topMusicId && topMusicName) {
+            const musicLink = `https://www.tiktok.com/music/-${topMusicId}`;
+            expertCommentary = `${expertCommentary}\n\n🎵 <b>Âm thanh xu hướng:</b> <a href="${musicLink}">${topMusicName}</a>`;
+        }
+
         const { data: newTrend, error: insertError } = await supabaseAdmin
             .from('trends')
             .insert({
@@ -170,11 +241,11 @@ ${dataContext}
                 trend_name: trend.trend_name,
                 viral_reason: trend.viral_reason,
                 content_ideas: trend.content_ideas,
-                trend_score: trend.trend_score,
-                videos_count: trend.videos_count,
-                channels_count: trend.channels_count,
-                channel_stats: trend.channel_stats,
-                expert_commentary: trend.expert_commentary,
+                trend_score: finalTrendScore,
+                videos_count: relatedItems.length || trend.videos_count,
+                channels_count: channelsCount,
+                channel_stats: channelStats,
+                expert_commentary: expertCommentary,
                 category_id: category_id, // Lưu danh mục
                 status: 'pending' // Chờ Admin duyệt
             })
