@@ -27,6 +27,10 @@ export default function CategoriesPage() {
   const [minVideos, setMinVideos] = useState("1");
   const [minChannels, setMinChannels] = useState("1");
   const [telegramChatId, setTelegramChatId] = useState("");
+  const [quantitativeWeight, setQuantitativeWeight] = useState("");
+  const [velocityWeight, setVelocityWeight] = useState("");
+  const [minViewsViral, setMinViewsViral] = useState("");
+  const [minViews, setMinViews] = useState("");
 
   const supabase = createClient();
 
@@ -63,6 +67,10 @@ export default function CategoriesPage() {
     setMinVideos("1");
     setMinChannels("1");
     setTelegramChatId("");
+    setQuantitativeWeight("");
+    setVelocityWeight("");
+    setMinViewsViral("");
+    setMinViews("");
     setIsModalOpen(true);
   }
 
@@ -74,6 +82,10 @@ export default function CategoriesPage() {
     setMinVideos(cat.min_videos?.toString() || "1");
     setMinChannels(cat.min_channels?.toString() || "1");
     setTelegramChatId(cat.telegram_chat_id || "");
+    setQuantitativeWeight(cat.trend_score_quantitative_weight?.toString() || "");
+    setVelocityWeight(cat.trend_score_velocity_weight?.toString() || "");
+    setMinViewsViral(cat.trend_score_min_views_viral?.toString() || "");
+    setMinViews(cat.min_views?.toString() || "");
     setIsModalOpen(true);
   }
 
@@ -107,7 +119,11 @@ export default function CategoriesPage() {
       custom_prompt: customPrompt,
       min_videos: parseInt(minVideos) || 1,
       min_channels: parseInt(minChannels) || 1,
-      telegram_chat_id: telegramChatId || null
+      telegram_chat_id: telegramChatId || null,
+      trend_score_quantitative_weight: quantitativeWeight ? parseFloat(quantitativeWeight) : null,
+      trend_score_velocity_weight: velocityWeight ? parseFloat(velocityWeight) : null,
+      trend_score_min_views_viral: minViewsViral ? parseInt(minViewsViral) : null,
+      min_views: minViews ? parseInt(minViews) : 0
     };
 
     let error;
@@ -199,7 +215,7 @@ export default function CategoriesPage() {
       </Card>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "Sửa Niche" : "Thêm Niche mới"}</DialogTitle>
           </DialogHeader>
@@ -250,6 +266,33 @@ export default function CategoriesPage() {
               <p className="text-xs text-gray-500">
                 Nếu bạn để trống, AI sẽ dùng Prompt mặc định. Gợi ý: Hãy thêm câu "Bạn là chuyên gia về mảng X... Hãy phân tích góc nhìn của khán giả Y...".
               </p>
+            </div>
+
+            <div className="border-t pt-4 space-y-4">
+              <h4 className="font-semibold text-sm text-gray-900">Cấu hình riêng cho Trend Score 2.0 & Lọc thô</h4>
+              <p className="text-xs text-gray-500">Bỏ trống nếu muốn áp dụng các tham số mặc định của hệ thống.</p>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Tỷ trọng Điểm định lượng (%)</Label>
+                  <Input type="number" placeholder="Mặc định: 70" value={quantitativeWeight} onChange={(e) => setQuantitativeWeight(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tỷ trọng Tốc độ lan truyền (%)</Label>
+                  <Input type="number" placeholder="Mặc định: 60" value={velocityWeight} onChange={(e) => setVelocityWeight(e.target.value)} />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Ngưỡng view/giờ cực nóng</Label>
+                  <Input type="number" placeholder="Mặc định: 15000" value={minViewsViral} onChange={(e) => setMinViewsViral(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Lượt xem video tối thiểu</Label>
+                  <Input type="number" placeholder="VD: 5000 (Lọc bài viết thô)" value={minViews} onChange={(e) => setMinViews(e.target.value)} />
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex justify-end space-x-2 pt-2">

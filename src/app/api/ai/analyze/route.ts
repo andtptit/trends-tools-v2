@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     if (category_id) {
         const { data: cat } = await supabaseAdmin
             .from('categories')
-            .select('custom_prompt, min_videos, min_channels')
+            .select('custom_prompt, min_videos, min_channels, trend_score_quantitative_weight, trend_score_velocity_weight, trend_score_min_views_viral')
             .eq('id', category_id)
             .single();
         if (cat) {
@@ -85,6 +85,16 @@ export async function POST(request: Request) {
             }
             if (cat.min_videos) min_videos = cat.min_videos;
             if (cat.min_channels) min_channels = cat.min_channels;
+
+            if (cat.trend_score_quantitative_weight !== null && cat.trend_score_quantitative_weight !== undefined) {
+                quantitativeWeight = parseFloat(cat.trend_score_quantitative_weight as any) / 100;
+            }
+            if (cat.trend_score_velocity_weight !== null && cat.trend_score_velocity_weight !== undefined) {
+                velocityWeight = parseFloat(cat.trend_score_velocity_weight as any) / 100;
+            }
+            if (cat.trend_score_min_views_viral !== null && cat.trend_score_min_views_viral !== undefined) {
+                minViewsViral = parseInt(cat.trend_score_min_views_viral as any);
+            }
         }
     }
 
@@ -168,15 +178,20 @@ ${dataContext}
     // 4. Lưu kết quả AI trả về vào Database
     const insertedTrends = [];
     for (const trend of trendsArray) {
-        // MVP: Lưu 1 trend ánh xạ vào ID đầu tiên của mảng
-        const mainDataId = trend.crawled_data_ids && trend.crawled_data_ids.length > 0 
-            ? trend.crawled_data_ids[0] 
-            : null;
+        // Lọc ra các ID thực sự tồn tại trong rawData (để tránh lỗi khóa ngoại do AI chép sai UUID)
+        const validIds = (trend.crawled_data_ids || []).filter((id: string) => 
+            rawData.some((item: any) => item.id === id)
+        );
 
-        if (!mainDataId) continue;
+        if (validIds.length === 0) {
+            console.warn(`Bỏ qua trend "${trend.trend_name}" do không chứa ID bài viết hợp lệ nào.`);
+            continue;
+        }
+
+        const mainDataId = validIds[0];
 
         // Trích xuất video liên quan để tính điểm định lượng
-        const relatedItems = rawData.filter((item: any) => trend.crawled_data_ids.includes(item.id));
+        const relatedItems = rawData.filter((item: any) => validIds.includes(item.id));
         
         let totalViews = 0;
         let totalEngagement = 0;
@@ -216,12 +231,27 @@ ${dataContext}
         const avgEngagementRate = totalViews > 0 ? (totalEngagement / totalViews) : 0;
         const engagementScore = Math.min(100, (avgEngagementRate / 0.15) * 100); // 15% rate is 100 points
 
-        const quantitativeScore = (velocityScore * velocityWeight) + (engagementScore * (1 - velocityWeight));
-        const aiFactor = trend.trend_score || 50;
+        let aiFactor = trend.trend_score || 50;
+        // Nếu AI chấm thang điểm 10 (<= 10), quy đổi về thang điểm 100
+        if (aiFactor > 0 && aiFactor <= 10) {
+            aiFactor = aiFactor * 10;
+        }
 
         const finalTrendScore = Math.max(0, Math.min(100, Math.round(
             (quantitativeScore * quantitativeWeight) + (aiFactor * (1 - quantitativeWeight))
         )));
+
+        const scoreBreakdown = {
+            velocity_score: Math.round(velocityScore),
+            velocity_weight: Math.round(velocityWeight * 100),
+            engagement_score: Math.round(engagementScore),
+            engagement_weight: Math.round((1 - velocityWeight) * 100),
+            quantitative_score: Math.round(quantitativeScore),
+            quantitative_weight: Math.round(quantitativeWeight * 100),
+            ai_score: Math.round(aiFactor),
+            ai_weight: Math.round((1 - quantitativeWeight) * 100),
+            final_score: finalTrendScore
+        };
 
         const channelsCount = uniqueChannels.size || 1;
 
@@ -241,11 +271,12 @@ ${dataContext}
             .from('trends')
             .insert({
                 crawled_data_id: mainDataId,
-                related_ids: trend.crawled_data_ids || [], // Lưu toàn bộ danh sách ID
+                related_ids: validIds, // Lưu danh sách ID đã lọc hợp lệ
                 trend_name: trend.trend_name,
                 viral_reason: trend.viral_reason,
                 content_ideas: trend.content_ideas,
                 trend_score: finalTrendScore,
+                score_breakdown: scoreBreakdown,
                 videos_count: relatedItems.length || trend.videos_count,
                 channels_count: channelsCount,
                 channel_stats: channelStats,

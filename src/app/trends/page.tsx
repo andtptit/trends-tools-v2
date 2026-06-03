@@ -299,8 +299,49 @@ ${fixNL(trend.content_ideas)}`;
                       <span>{trend.trend_name}</span>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant={trend.trend_score >= 80 ? "destructive" : "secondary"}>{trend.trend_score}</Badge>
+                  <TableCell className="relative overflow-visible">
+                    <div className="relative group inline-block cursor-help hover:z-50">
+                      <Badge variant={trend.trend_score >= 80 ? "destructive" : "secondary"}>
+                        {trend.trend_score}
+                      </Badge>
+                      
+                      {/* Hover Tooltip Breakdown */}
+                      <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl w-72 border border-slate-800 pointer-events-none space-y-2 text-left leading-relaxed">
+                        <div className="font-bold text-xs border-b border-slate-800 pb-1.5 flex justify-between items-center text-purple-400">
+                          <span>📊 Chi tiết điểm số</span>
+                          <span>Độ hot: {trend.trend_score}/100</span>
+                        </div>
+                        {trend.score_breakdown ? (
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between">
+                              <span>1. Điểm Tốc độ (Velocity):</span>
+                              <span className="font-semibold text-white">{trend.score_breakdown.velocity_score}/100</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>2. Điểm Tương tác (Engagement):</span>
+                              <span className="font-semibold text-white">{trend.score_breakdown.engagement_score}/100</span>
+                            </div>
+                            <div className="flex justify-between text-slate-400 pl-2">
+                              <span>↳ Điểm Định lượng ({trend.score_breakdown.velocity_weight}% Tốc độ + {trend.score_breakdown.engagement_weight}% Tương tác):</span>
+                              <span className="font-semibold text-slate-200">{trend.score_breakdown.quantitative_score}/100</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>3. Điểm Định tính (AI Qualitative):</span>
+                              <span className="font-semibold text-white">{trend.score_breakdown.ai_score}/100</span>
+                            </div>
+                            <div className="border-t border-slate-800 pt-1.5 flex justify-between font-bold text-white text-xs">
+                              <span>Kết quả ({trend.score_breakdown.quantitative_weight}% Định lượng + {trend.score_breakdown.ai_weight}% AI):</span>
+                              <span className="text-orange-400">{trend.trend_score}/100</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-slate-400 italic">
+                            Trend được tạo trước phiên bản 2.0. Không có dữ liệu phân tích chi tiết.
+                          </div>
+                        )}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+                      </div>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant={trend.status === 'approved' ? "default" : trend.status === 'rejected' ? "destructive" : "outline"}>

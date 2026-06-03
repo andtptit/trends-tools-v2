@@ -40,6 +40,15 @@ export async function POST(request: Request) {
         });
     }
 
+    // Lấy thông tin cấu hình của các Categories
+    const { data: categoriesData } = await supabaseAdmin
+        .from('categories')
+        .select('id, trend_score_quantitative_weight, trend_score_velocity_weight, trend_score_min_views_viral');
+    const categoriesMap = new Map();
+    if (categoriesData) {
+        categoriesData.forEach(c => categoriesMap.set(c.id, c));
+    }
+
     // Thu thập tất cả crawled_data_ids từ payload để query hàng loạt
     const allCrawledIds: string[] = [];
     trendsArray.forEach((trend: any) => {
@@ -67,11 +76,37 @@ export async function POST(request: Request) {
             continue; // Bỏ qua trend lỗi cấu trúc
         }
 
-        const mainDataId = trend.crawled_data_ids.length > 0 ? trend.crawled_data_ids[0] : null;
-        if (!mainDataId) continue;
+        // Lọc ra các ID thực sự tồn tại trong rawData (để tránh lỗi khóa ngoại do AI chép sai UUID)
+        const validIds = trend.crawled_data_ids.filter((id: string) => 
+            rawData.some((item: any) => item.id === id)
+        );
+
+        if (validIds.length === 0) {
+            console.warn(`Bỏ qua trend "${trend.trend_name}" do không chứa ID bài viết hợp lệ nào.`);
+            continue;
+        }
+
+        const mainDataId = validIds[0];
 
         // Trích xuất video liên quan từ DB để tính điểm định lượng
-        const relatedItems = rawData.filter((item: any) => trend.crawled_data_ids.includes(item.id));
+        const relatedItems = rawData.filter((item: any) => validIds.includes(item.id));
+        
+        let trendQuantitativeWeight = quantitativeWeight;
+        let trendVelocityWeight = velocityWeight;
+        let trendMinViewsViral = minViewsViral;
+
+        const cat = trend.category_id ? categoriesMap.get(trend.category_id) : null;
+        if (cat) {
+            if (cat.trend_score_quantitative_weight !== null && cat.trend_score_quantitative_weight !== undefined) {
+                trendQuantitativeWeight = parseFloat(cat.trend_score_quantitative_weight) / 100;
+            }
+            if (cat.trend_score_velocity_weight !== null && cat.trend_score_velocity_weight !== undefined) {
+                trendVelocityWeight = parseFloat(cat.trend_score_velocity_weight) / 100;
+            }
+            if (cat.trend_score_min_views_viral !== null && cat.trend_score_min_views_viral !== undefined) {
+                trendMinViewsViral = parseInt(cat.trend_score_min_views_viral);
+            }
+        }
         
         let totalViews = 0;
         let totalEngagement = 0;
@@ -106,17 +141,33 @@ export async function POST(request: Request) {
         });
 
         const avgVelocity = relatedItems.length > 0 ? (velocitySum / relatedItems.length) : 0;
-        const velocityScore = Math.min(100, (avgVelocity / minViewsViral) * 100);
+        const velocityScore = Math.min(100, (avgVelocity / trendMinViewsViral) * 100);
 
         const avgEngagementRate = totalViews > 0 ? (totalEngagement / totalViews) : 0;
         const engagementScore = Math.min(100, (avgEngagementRate / 0.15) * 100);
 
-        const quantitativeScore = (velocityScore * velocityWeight) + (engagementScore * (1 - velocityWeight));
-        const aiFactor = trend.trend_score || 50;
+        const quantitativeScore = (velocityScore * trendVelocityWeight) + (engagementScore * (1 - trendVelocityWeight));
+        let aiFactor = trend.trend_score || 50;
+        // Nếu AI chấm thang điểm 10 (<= 10), quy đổi về thang điểm 100
+        if (aiFactor > 0 && aiFactor <= 10) {
+            aiFactor = aiFactor * 10;
+        }
 
         const finalTrendScore = Math.max(0, Math.min(100, Math.round(
-            (quantitativeScore * quantitativeWeight) + (aiFactor * (1 - quantitativeWeight))
+            (quantitativeScore * trendQuantitativeWeight) + (aiFactor * (1 - trendQuantitativeWeight))
         )));
+
+        const scoreBreakdown = {
+            velocity_score: Math.round(velocityScore),
+            velocity_weight: Math.round(trendVelocityWeight * 100),
+            engagement_score: Math.round(engagementScore),
+            engagement_weight: Math.round((1 - trendVelocityWeight) * 100),
+            quantitative_score: Math.round(quantitativeScore),
+            quantitative_weight: Math.round(trendQuantitativeWeight * 100),
+            ai_score: Math.round(aiFactor),
+            ai_weight: Math.round((1 - trendQuantitativeWeight) * 100),
+            final_score: finalTrendScore
+        };
 
         const channelsCount = uniqueChannels.size || trend.channels_count || 1;
 
@@ -139,12 +190,13 @@ export async function POST(request: Request) {
             .from('trends')
             .insert({
                 crawled_data_id: mainDataId,
-                related_ids: trend.crawled_data_ids,
+                related_ids: validIds,
                 trend_name: trend.trend_name,
                 viral_reason: trend.viral_reason || '',
                 content_ideas: trend.content_ideas || '',
                 trend_score: finalTrendScore,
-                videos_count: relatedItems.length || trend.videos_count || trend.crawled_data_ids.length,
+                score_breakdown: scoreBreakdown,
+                videos_count: relatedItems.length || trend.videos_count || validIds.length,
                 channels_count: channelsCount,
                 channel_stats: channelStats,
                 expert_commentary: expertCommentary,

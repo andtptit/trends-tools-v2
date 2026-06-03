@@ -38,10 +38,24 @@ export async function POST(request: Request) {
     let min_videos = 1;
     let min_channels = 1;
     if (category_id && category_id !== 'all') {
-        const { data: catData } = await supabaseAdmin.from('categories').select('min_videos, min_channels').eq('id', category_id).single();
+        const { data: catData } = await supabaseAdmin
+            .from('categories')
+            .select('min_videos, min_channels, trend_score_quantitative_weight, trend_score_velocity_weight, trend_score_min_views_viral')
+            .eq('id', category_id)
+            .single();
         if (catData) {
             if (catData.min_videos) min_videos = catData.min_videos;
             if (catData.min_channels) min_channels = catData.min_channels;
+
+            if (catData.trend_score_quantitative_weight !== null && catData.trend_score_quantitative_weight !== undefined) {
+                quantitativeWeight = parseFloat(catData.trend_score_quantitative_weight as any) / 100;
+            }
+            if (catData.trend_score_velocity_weight !== null && catData.trend_score_velocity_weight !== undefined) {
+                velocityWeight = parseFloat(catData.trend_score_velocity_weight as any) / 100;
+            }
+            if (catData.trend_score_min_views_viral !== null && catData.trend_score_min_views_viral !== undefined) {
+                minViewsViral = parseInt(catData.trend_score_min_views_viral as any);
+            }
         }
     }
 
@@ -142,13 +156,22 @@ ${trendsContext}
         
         // Remove duplicates from crawled_data_ids array
         const uniqueIds = [...new Set(trend.crawled_data_ids)];
-        const mainDataId = uniqueIds[0];
 
         // Truy vấn dữ liệu thực tế từ database để tính điểm định lượng cho trend tinh
         const { data: relatedItems } = await supabaseAdmin
             .from('crawled_data')
-            .select('author_name, author_username, views_count, likes_count, comments_count, shares_count, collect_count, music_id, music_name, posted_at, created_at')
+            .select('id, author_name, author_username, views_count, likes_count, comments_count, shares_count, collect_count, music_id, music_name, posted_at, created_at')
             .in('id', uniqueIds);
+
+        // Lọc ra các ID thực sự tồn tại trong database (để tránh lỗi khóa ngoại do AI chép sai UUID)
+        const validIds = relatedItems ? relatedItems.map((item: any) => item.id) : [];
+
+        if (validIds.length === 0) {
+            console.warn(`Bỏ qua trend "${trend.trend_name}" do không chứa ID bài viết hợp lệ nào trong DB.`);
+            continue;
+        }
+
+        const mainDataId = validIds[0];
 
         let totalViews = 0;
         let totalEngagement = 0;
@@ -191,11 +214,27 @@ ${trendsContext}
         const engagementScore = Math.min(100, (avgEngagementRate / 0.15) * 100);
 
         const quantitativeScore = (velocityScore * velocityWeight) + (engagementScore * (1 - velocityWeight));
-        const aiFactor = trend.trend_score || 50;
+        let aiFactor = trend.trend_score || 50;
+        // Nếu AI chấm thang điểm 10 (<= 10), quy đổi về thang điểm 100
+        if (aiFactor > 0 && aiFactor <= 10) {
+            aiFactor = aiFactor * 10;
+        }
 
         const finalTrendScore = Math.max(0, Math.min(100, Math.round(
             (quantitativeScore * quantitativeWeight) + (aiFactor * (1 - quantitativeWeight))
         )));
+
+        const scoreBreakdown = {
+            velocity_score: Math.round(velocityScore),
+            velocity_weight: Math.round(velocityWeight * 100),
+            engagement_score: Math.round(engagementScore),
+            engagement_weight: Math.round((1 - velocityWeight) * 100),
+            quantitative_score: Math.round(quantitativeScore),
+            quantitative_weight: Math.round(quantitativeWeight * 100),
+            ai_score: Math.round(aiFactor),
+            ai_weight: Math.round((1 - quantitativeWeight) * 100),
+            final_score: finalTrendScore
+        };
 
         const channelsCount = uniqueChannels.size || 1;
 
@@ -215,12 +254,13 @@ ${trendsContext}
 
         const { error: insertError } = await supabaseAdmin.from('trends').insert({
             crawled_data_id: mainDataId,
-            related_ids: uniqueIds,
+            related_ids: validIds,
             trend_name: trend.trend_name,
             viral_reason: trend.viral_reason,
             content_ideas: trend.content_ideas,
             trend_score: finalTrendScore,
-            videos_count: uniqueIds.length,
+            score_breakdown: scoreBreakdown,
+            videos_count: validIds.length,
             channels_count: channelsCount,
             channel_stats: channelStats,
             expert_commentary: expertCommentary,
