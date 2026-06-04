@@ -25,6 +25,14 @@ export default function TrendsPage() {
   const [previewAction, setPreviewAction] = useState<'approve' | 'resend'>('approve');
   const supabase = createClient();
 
+  // AI Memory Reject States
+  const [rejectTrend, setRejectTrend] = useState<any | null>(null);
+  const [rejectFeedback, setRejectFeedback] = useState("");
+  const [saveToMemory, setSaveToMemory] = useState(true);
+  const [rejectRuleType, setRejectRuleType] = useState("grouping");
+  const [isRejecting, setIsRejecting] = useState(false);
+
+
   useEffect(() => {
     fetchTrends();
     fetchTelegramGroups();
@@ -40,6 +48,7 @@ export default function TrendsPage() {
     const { data, error } = await supabase
       .from('trends')
       .select('*, categories(name)')
+      .neq('status', 'analyzed')
       .order('created_at', { ascending: false });
       
     if (error) {
@@ -109,6 +118,53 @@ export default function TrendsPage() {
         }).catch(() => toast.error("Lỗi gọi API Telegram"));
       }
     }
+  };
+
+  const handleRejectSubmit = async () => {
+    if (!rejectTrend) return;
+    setIsRejecting(true);
+    try {
+      // 1. Cập nhật trạng thái trend sang rejected và lưu lý do từ chối
+      const { error: updateError } = await supabase
+        .from('trends')
+        .update({ 
+          status: 'rejected',
+          reject_reason: rejectFeedback.trim() || null
+        })
+        .eq('id', rejectTrend.id);
+
+      if (updateError) {
+        toast.error("Lỗi cập nhật trạng thái");
+        setIsRejecting(false);
+        return;
+      }
+
+      // 2. Nếu tích chọn Lưu vào bộ nhớ AI
+      if (saveToMemory && rejectFeedback.trim()) {
+        const { error: insertError } = await supabase
+          .from('ai_feedback_memory')
+          .insert({
+            rule_type: rejectRuleType,
+            user_feedback: rejectFeedback.trim(),
+            example_case: `Vụ việc từ chối: "${rejectTrend.trend_name}"`
+          });
+
+        if (insertError) {
+          toast.error("Không thể lưu góp ý vào bộ nhớ AI: " + insertError.message);
+        } else {
+          toast.success("Đã ghi nhận góp ý vào bộ nhớ AI và từ chối trend!");
+        }
+      } else {
+        toast.success("Đã từ chối trend thành công!");
+      }
+
+      setRejectTrend(null);
+      setRejectFeedback("");
+      fetchTrends();
+    } catch (e: any) {
+      toast.error("Có lỗi xảy ra: " + e.message);
+    }
+    setIsRejecting(false);
   };
 
   const openPreviewModal = async (trend: any, action: 'approve' | 'resend') => {
@@ -356,7 +412,7 @@ ${fixNL(trend.content_ideas)}`;
                       {trend.status === 'pending' && (
                         <>
                           <Button size="sm" variant="default" className="h-8 bg-green-600 hover:bg-green-700" onClick={() => openPreviewModal(trend, 'approve')}>Duyệt</Button>
-                          <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-200 hover:bg-red-50" onClick={() => updateStatus(trend.id, 'rejected')}>Bỏ qua</Button>
+                          <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-200 hover:bg-red-50" onClick={() => { setRejectTrend(trend); setRejectFeedback(""); }}>Bỏ qua</Button>
                         </>
                       )}
                       {trend.status === 'approved' && (
@@ -433,8 +489,8 @@ ${fixNL(trend.content_ideas)}`;
             <div className="flex justify-end gap-2 pt-4 border-t">
                {selectedTrend?.status === 'pending' && (
                   <>
-                    <Button variant="default" onClick={() => { openPreviewModal(selectedTrend, 'approve'); setSelectedTrend(null); }}>Duyệt</Button>
-                    <Button variant="destructive" onClick={() => { updateStatus(selectedTrend.id, 'rejected'); setSelectedTrend(null); }}>Từ chối</Button>
+                     <Button variant="default" onClick={() => { openPreviewModal(selectedTrend, 'approve'); setSelectedTrend(null); }}>Duyệt</Button>
+                     <Button variant="destructive" onClick={() => { setRejectTrend(selectedTrend); setSelectedTrend(null); setRejectFeedback(""); }}>Từ chối</Button>
                   </>
                )}
                <Button variant="outline" onClick={() => setSelectedTrend(null)}>Đóng</Button>
@@ -511,6 +567,75 @@ ${fixNL(trend.content_ideas)}`;
                 }}
              >
                 {previewAction === 'approve' ? 'Xác nhận & Gửi Telegram' : 'Gửi lại Telegram'}
+             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal từ chối & góp ý AI */}
+      <Dialog open={!!rejectTrend} onOpenChange={(open) => !open && setRejectTrend(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              Từ chối Trend & Góp ý AI
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-sm">
+              <span className="font-semibold text-slate-700">Trend từ chối:</span>
+              <p className="text-slate-900 mt-1 font-medium italic">"{rejectTrend?.trend_name}"</p>
+            </div>
+
+            {/* Lý do từ chối - Luôn luôn bắt buộc nhập */}
+            <div className="space-y-1">
+              <label className="text-sm font-semibold text-slate-800">Lý do từ chối/bỏ qua:</label>
+              <textarea 
+                className="w-full h-20 p-2.5 rounded-md border text-sm focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                placeholder="Nhập lý do tại sao bạn bỏ qua trend này (ví dụ: tin cũ, tin nhảm, trùng lặp...)"
+                value={rejectFeedback}
+                onChange={(e) => setRejectFeedback(e.target.value)}
+              />
+            </div>
+
+            {/* Checkbox lưu làm bài học cho AI */}
+            <div className="flex items-center gap-2 cursor-pointer pt-1">
+              <input
+                type="checkbox"
+                id="save_to_memory"
+                checked={saveToMemory}
+                onChange={(e) => setSaveToMemory(e.target.checked)}
+                className="w-4 h-4 rounded cursor-pointer"
+              />
+              <label htmlFor="save_to_memory" className="text-sm font-semibold text-slate-800 cursor-pointer">
+                Đồng thời lưu làm quy tắc học lâu dài cho AI
+              </label>
+            </div>
+
+            {saveToMemory && (
+              <div className="space-y-1.5 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                <label className="text-xs font-semibold text-gray-700">Phân loại lỗi của AI để tối ưu:</label>
+                <select 
+                  className="w-full h-9 px-3 rounded-md border border-input bg-background text-xs"
+                  value={rejectRuleType}
+                  onChange={(e) => setRejectRuleType(e.target.value)}
+                >
+                  <option value="grouping">Gom nhóm sai (ví dụ: gộp nhiều scandal/tin tức khác nhau)</option>
+                  <option value="naming">Đặt tên sai/chung chung (ví dụ: tên quá bao quát)</option>
+                  <option value="region">Nhận diện vùng miền sai (ví dụ: thiếu nhãn miền Tây)</option>
+                  <option value="general">Lỗi khác</option>
+                </select>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+             <Button variant="outline" onClick={() => setRejectTrend(null)} disabled={isRejecting}>Quay lại</Button>
+             <Button 
+                variant="destructive"
+                onClick={handleRejectSubmit}
+                disabled={isRejecting || !rejectFeedback.trim()}
+             >
+                {isRejecting ? 'Đang xử lý...' : 'Xác nhận từ chối'}
              </Button>
           </div>
         </DialogContent>

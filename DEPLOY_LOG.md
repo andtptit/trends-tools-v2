@@ -2,6 +2,15 @@
 
 File này dùng để theo dõi các bản cập nhật phiên bản của hệ thống Trending Tools.
 
+## Version 2.6 Premium (04/06/2026)
+- **Kiến trúc & Sửa lỗi:**
+  - Khắc phục triệt để lỗi treo pipeline ở trạng thái `processing` bằng cách tăng giới hạn thời gian chạy hàm (`maxDuration = 60`) trên Vercel và sửa lỗi logic gán `logId` khi gặp Exception.
+  - Tách biệt hoàn toàn trends trung gian của từng lô nhỏ bằng trạng thái `'analyzed'` mới. Giao diện Admin (`/trends`) sẽ chỉ hiển thị các trend tinh hoa cuối cùng sau bước gộp (Reduce) ở trạng thái `'pending'`.
+- **Tối ưu AI Agent & Memory:**
+  - Đồng bộ cơ sở dữ liệu `ai_feedback_memory` để nạp các quy tắc học từ người dùng (Memory) và lịch sử các trend đã duyệt trong 3 ngày qua vào Prompt của AI bước Reduce.
+  - Tích hợp vòng lặp tự phản chỉnh (Reflection Loop) giúp AI tự kiểm tra và sửa lỗi đặt tên bao quát hoặc gộp nhóm quá rộng trước khi xuất kết quả.
+  - Hỗ trợ giao diện Bộ nhớ AI riêng biệt và Modal Từ chối kèm lý do / dạy học tự động.
+
 ## Version 2.3 Premium (18/05/2026)
 - **Kiến trúc:** Nâng cấp AI Pipeline lên mô hình **Map-Reduce**.
 - **Tính năng mới:** Thêm API `/api/ai/reduce-trends` để tự động gom nhóm, gộp các Trends trùng lặp sinh ra từ các lô nhỏ lẻ.

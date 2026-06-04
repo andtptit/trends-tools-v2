@@ -5,6 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+export const maxDuration = 60; // 60 seconds Vercel timeout limit
+
 export async function POST(request: Request) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('your_') 
     ? process.env.SUPABASE_SERVICE_ROLE_KEY 
@@ -151,7 +153,7 @@ ${dataContext}
             channel_stats: trend.channel_stats,
             expert_commentary: trend.expert_commentary,
             category_id: category_id === 'all' ? null : category_id,
-            status: 'pending'
+            status: 'analyzed'
         });
         if (!insertError) newTrendsCount++;
     }

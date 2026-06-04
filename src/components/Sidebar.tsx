@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { TrendingUp, Database, Activity, FileText, Layers, Settings, ClipboardList, Menu, X, MessageSquare } from "lucide-react";
+import { TrendingUp, Database, Activity, FileText, Layers, Settings, ClipboardList, Menu, X, MessageSquare, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const menuItems = [
@@ -12,6 +12,7 @@ const menuItems = [
   { href: "/categories", label: "Danh mục Niche", icon: Layers },
   { href: "/telegram-groups", label: "Nhóm Telegram", icon: MessageSquare },
   { href: "/sources", label: "Nguồn dữ liệu", icon: Database },
+  { href: "/ai-memory", label: "Bộ nhớ AI", icon: Brain },
   { href: "/ai-logs", label: "Nhật ký AI", icon: ClipboardList },
   { href: "/settings", label: "Cài đặt", icon: Settings },
 ];
@@ -96,7 +97,7 @@ export function Sidebar() {
         })}
       </nav>
       <div className="p-4 border-t text-center shrink-0">
-        <p className="text-[10px] text-gray-400 font-medium tracking-widest uppercase">Version 2.5 Premium</p>
+        <p className="text-[10px] text-gray-400 font-medium tracking-widest uppercase">Version 2.6 Premium</p>
       </div>
     </aside>
     </>

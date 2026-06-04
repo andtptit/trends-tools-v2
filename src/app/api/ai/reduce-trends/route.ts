@@ -5,6 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+export const maxDuration = 60; // 60 seconds Vercel timeout limit
+
 export async function POST(request: Request) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('your_') 
     ? process.env.SUPABASE_SERVICE_ROLE_KEY 
@@ -21,6 +23,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { log_id, category_id, accumulated_tokens = 0 } = body;
+    logId = log_id;
     // 0. Lấy cấu hình hệ thống
     const { data: settingsData } = await supabaseAdmin.from('system_settings').select('*');
     let quantitativeWeight = 0.7;
@@ -59,7 +62,7 @@ export async function POST(request: Request) {
         }
     }
 
-    let query = supabaseAdmin.from('trends').select('*').eq('status', 'pending');
+    let query = supabaseAdmin.from('trends').select('*').eq('status', 'analyzed');
     if (category_id && category_id !== 'all') {
         query = query.eq('category_id', category_id);
     } else {
@@ -79,6 +82,49 @@ export async function POST(request: Request) {
             }).eq('id', logId);
         }
         return NextResponse.json({ success: true, message: "Bỏ qua Reduce do không đủ dữ liệu" });
+    }
+
+    // 1.5 Fetch memory rules (up to 20 active rules) and history approved trends safely
+    let memoryPrompt = "";
+    let historyPrompt = "";
+    try {
+        const { data: memoryRules } = await supabaseAdmin
+            .from('ai_feedback_memory')
+            .select('rule_type, user_feedback, example_case')
+            .eq('is_active', true)
+            .limit(20);
+
+        if (memoryRules && memoryRules.length > 0) {
+            memoryPrompt = `\nQUY TẮC BỘ NHỚ LỊCH SỬ TỪ NGƯỜI DÙNG (BẮT BUỘC TUÂN THỦ TUYỆT ĐỐI):\n`;
+            memoryRules.forEach((rule, idx) => {
+                memoryPrompt += `- [Quy tắc ${idx + 1} - Loại ${rule.rule_type}]: ${rule.user_feedback}`;
+                if (rule.example_case) {
+                    memoryPrompt += ` (Ví dụ: ${rule.example_case})`;
+                }
+                memoryPrompt += `\n`;
+            });
+        }
+    } catch (e: any) {
+        console.warn("Chưa tạo bảng ai_feedback_memory hoặc lỗi truy cập:", e.message);
+    }
+
+    try {
+        const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: approvedTrends } = await supabaseAdmin
+            .from('trends')
+            .select('trend_name, viral_reason')
+            .eq('status', 'approved')
+            .gt('created_at', threeDaysAgo);
+
+        if (approvedTrends && approvedTrends.length > 0) {
+            historyPrompt = `\nDANH SÁCH CÁC TREND ĐÃ DUYỆT GẦN ĐÂY (TRÁNH TRÙNG LẶP HOẶC TẠO LẠI TRÙNG):
+(Dưới đây là các chủ đề đã được duyệt đăng gần đây. Nếu các video mới thuộc một trong các sự kiện này, hãy cân nhắc xem có phải sự kiện mới hay không. Nếu là cùng một sự kiện cũ, hãy bỏ qua không tạo trend mới để tránh lặp lại tin cũ trên kênh):\n`;
+            approvedTrends.forEach((t, idx) => {
+                historyPrompt += `- Trend đã duyệt ${idx + 1}: ${t.trend_name} (${t.viral_reason})\n`;
+            });
+        }
+    } catch (e: any) {
+        console.warn("Lỗi truy vấn trends đã duyệt:", e.message);
     }
 
     // 2. Build Prompt for Reduce
@@ -116,6 +162,15 @@ LUẬT GỘP TREND & LỌC ĐIỀU KIỆN (BẮT BUỘC):
    - BẮT BUỘC giữ lại toàn bộ các trend riêng biệt thỏa mãn điều kiện lọc trên, tuyệt đối không được bỏ sót, tự ý xóa bỏ hoặc ngộp chung các trend đủ điều kiện vào nhau.
 
 5. Số lượng kênh và video: Bạn không cần đếm chính xác, hệ thống sẽ tự đếm dựa trên IDs bài viết bạn trả về. Bạn chỉ cần trả về mảng crawled_data_ids chứa TẤT CẢ các ID của các video thuộc Trend đã gộp.
+
+${memoryPrompt}
+${historyPrompt}
+
+BƯỚC TỰ KIỂM LỖI & SỬA SAI (REFLECTION LOOP):
+Trước khi trả ra kết quả cuối cùng, hãy tự đóng vai trò là một người kiểm duyệt khó tính và đánh giá lại danh sách trend vừa dự thảo:
+1. Đã có trend nào vi phạm quy tắc bộ nhớ ở trên chưa? (Ví dụ: Bạn có đang gom chung scandal trốn thuế của Ji Chang Wook và đám cưới của Hà Du Quân lại thành một nhóm "Tin tức người nổi tiếng" không? Nếu có, hãy tách chúng ra ngay lập tức thành hai trend riêng biệt!).
+2. Tên các trend đã có địa danh cụ thể (ví dụ: Miền Tây, Hải Phòng, Đồng Nai...) nếu dữ liệu gốc có đề cập chưa? 
+Hãy thực hiện sửa sai và chỉ trả về danh sách các trend đã được hoàn thiện 100%.
 
 DỮ LIỆU CÁC TREND THÔ:
 ${trendsContext}
