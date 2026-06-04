@@ -106,30 +106,32 @@ export async function POST(request: Request) {
         let topMusicName = '';
         let maxMusicCount = 0;
 
-        relatedItems.forEach((item: any) => {
-            totalViews += item.views_count || 0;
-            totalEngagement += (item.likes_count || 0) + (item.comments_count || 0) + (item.shares_count || 0) + (item.collect_count || 0);
-            
-            const channelKey = item.author_username || item.author_name || 'Unknown';
-            uniqueChannels.add(channelKey);
+        if (relatedItems) {
+            relatedItems.forEach((item: any) => {
+                totalViews += item.views_count || 0;
+                totalEngagement += (item.likes_count || 0) + (item.comments_count || 0) + (item.shares_count || 0) + (item.collect_count || 0);
+                
+                const channelKey = item.author_username || item.author_name || 'Unknown';
+                uniqueChannels.add(channelKey);
 
-            const hours = Math.max(1, (new Date(item.created_at || Date.now()).getTime() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
-            velocitySum += (item.views_count || 0) / hours;
+                const hours = Math.max(1, (new Date(item.created_at || Date.now()).getTime() - new Date(item.posted_at || Date.now()).getTime()) / (1000 * 60 * 60));
+                velocitySum += (item.views_count || 0) / hours;
 
-            if (item.music_id && item.music_name) {
-                if (!musicMap[item.music_id]) {
-                    musicMap[item.music_id] = { name: item.music_name, count: 0 };
+                if (item.music_id && item.music_name) {
+                    if (!musicMap[item.music_id]) {
+                        musicMap[item.music_id] = { name: item.music_name, count: 0 };
+                    }
+                    musicMap[item.music_id].count++;
+                    if (musicMap[item.music_id].count > maxMusicCount) {
+                        maxMusicCount = musicMap[item.music_id].count;
+                        topMusicId = item.music_id;
+                        topMusicName = item.music_name;
+                    }
                 }
-                musicMap[item.music_id].count++;
-                if (musicMap[item.music_id].count > maxMusicCount) {
-                    maxMusicCount = musicMap[item.music_id].count;
-                    topMusicId = item.music_id;
-                    topMusicName = item.music_name;
-                }
-            }
-        });
+            });
+        }
 
-        const avgVelocity = relatedItems.length > 0 ? (velocitySum / relatedItems.length) : 0;
+        const avgVelocity = (relatedItems && relatedItems.length > 0) ? (velocitySum / relatedItems.length) : 0;
         const velocityScore = Math.min(100, (avgVelocity / minViewsViral) * 100);
 
         const avgEngagementRate = totalViews > 0 ? (totalEngagement / totalViews) : 0;
@@ -159,9 +161,11 @@ export async function POST(request: Request) {
 
         const channelsCount = uniqueChannels.size || 1;
 
-        const channelStats = relatedItems.map((item: any) => 
-            `- Kênh ${item.author_name || item.author_username}: ${(item.views_count || 0).toLocaleString()} views | ${(item.likes_count || 0).toLocaleString()} likes`
-        ).join('\n');
+        const channelStats = relatedItems
+            ? relatedItems.map((item: any) => 
+                `- Kênh ${item.author_name || item.author_username}: ${(item.views_count || 0).toLocaleString()} views | ${(item.likes_count || 0).toLocaleString()} likes`
+              ).join('\n')
+            : 'N/A';
 
         let expertCommentary = trend.expert_commentary || '';
         if (topMusicId && topMusicName) {
