@@ -2,6 +2,16 @@
 
 File này dùng để theo dõi các bản cập nhật phiên bản của hệ thống Trending Tools.
 
+## Version 2.7 Premium (04/06/2026)
+- **Tối ưu hóa & Khắc phục Timeout (N8N-based Reduce):**
+  - Khắc phục triệt để lỗi timeout 10 giây (504 Gateway Timeout) của Vercel bằng cách chuyển dịch tác vụ gọi AI của bước Hợp nhất (Reduce) sang chạy trực tiếp trên N8N.
+  - Thêm API `/api/ai/get-raw-trends` cung cấp bối cảnh gộp cho N8N.
+  - Thêm API `/api/ai/save-reduced-trends` nhận kết quả gộp, tự động tính điểm số toán học (Tốc độ, Tương tác) và lưu vào Database dưới 1 giây.
+  - Thêm logic dọn dẹp chủ động các trend thô có trạng thái `analyzed` cũ khi bắt đầu phiên chạy trong `start-session` để chống nhiễu dữ liệu.
+- **Cải tiến UI/UX:**
+  - Tích hợp biểu đồ tiến trình dạng thanh ngang (progress bar) trực quan cho 3 thành phần điểm số trong Modal xem chi tiết.
+  - Nâng kích thước Modal chi tiết rộng rãi dễ nhìn. Hỗ trợ click trực tiếp vào Badge điểm số trên danh sách để xem chi tiết.
+
 ## Version 2.6 Premium (04/06/2026)
 - **Kiến trúc & Sửa lỗi:**
   - Khắc phục triệt để lỗi treo pipeline ở trạng thái `processing` bằng cách tăng giới hạn thời gian chạy hàm (`maxDuration = 60`) trên Vercel và sửa lỗi logic gán `logId` khi gặp Exception.

@@ -355,49 +355,15 @@ ${fixNL(trend.content_ideas)}`;
                       <span>{trend.trend_name}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="relative overflow-visible">
-                    <div className="relative group inline-block cursor-help hover:z-50">
-                      <Badge variant={trend.trend_score >= 80 ? "destructive" : "secondary"}>
-                        {trend.trend_score}
-                      </Badge>
-                      
-                      {/* Hover Tooltip Breakdown */}
-                      <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 p-3 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl w-72 border border-slate-800 pointer-events-none space-y-2 text-left leading-relaxed">
-                        <div className="font-bold text-xs border-b border-slate-800 pb-1.5 flex justify-between items-center text-purple-400">
-                          <span>📊 Chi tiết điểm số</span>
-                          <span>Độ hot: {trend.trend_score}/100</span>
-                        </div>
-                        {trend.score_breakdown ? (
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between">
-                              <span>1. Điểm Tốc độ (Velocity):</span>
-                              <span className="font-semibold text-white">{trend.score_breakdown.velocity_score}/100</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>2. Điểm Tương tác (Engagement):</span>
-                              <span className="font-semibold text-white">{trend.score_breakdown.engagement_score}/100</span>
-                            </div>
-                            <div className="flex justify-between text-slate-400 pl-2">
-                              <span>↳ Điểm Định lượng ({trend.score_breakdown.velocity_weight}% Tốc độ + {trend.score_breakdown.engagement_weight}% Tương tác):</span>
-                              <span className="font-semibold text-slate-200">{trend.score_breakdown.quantitative_score}/100</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>3. Điểm Định tính (AI Qualitative):</span>
-                              <span className="font-semibold text-white">{trend.score_breakdown.ai_score}/100</span>
-                            </div>
-                            <div className="border-t border-slate-800 pt-1.5 flex justify-between font-bold text-white text-xs">
-                              <span>Kết quả ({trend.score_breakdown.quantitative_weight}% Định lượng + {trend.score_breakdown.ai_weight}% AI):</span>
-                              <span className="text-orange-400">{trend.trend_score}/100</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-slate-400 italic">
-                            Trend được tạo trước phiên bản 2.0. Không có dữ liệu phân tích chi tiết.
-                          </div>
-                        )}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
-                      </div>
-                    </div>
+                  <TableCell>
+                    <Badge 
+                      variant={trend.trend_score >= 80 ? "destructive" : "secondary"}
+                      className="cursor-pointer"
+                      title="Click để xem chi tiết điểm số"
+                      onClick={() => setSelectedTrend(trend)}
+                    >
+                      {trend.trend_score}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant={trend.status === 'approved' ? "default" : trend.status === 'rejected' ? "destructive" : "outline"}>
@@ -447,7 +413,7 @@ ${fixNL(trend.content_ideas)}`;
 
       {/* Modal chi tiết */}
       <Dialog open={!!selectedTrend} onOpenChange={(open) => !open && setSelectedTrend(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl leading-tight">{selectedTrend?.trend_name}</DialogTitle>
           </DialogHeader>
@@ -461,6 +427,76 @@ ${fixNL(trend.content_ideas)}`;
                    <Users className="w-4 h-4 text-purple-600" />
                    {selectedTrend?.channels_count || 1} kênh lan truyền
                 </div>
+            </div>
+
+            {/* Chi tiết điểm số */}
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-indigo-500" />
+                Đánh giá chi tiết & Điểm số
+              </h4>
+              {selectedTrend?.score_breakdown ? (
+                <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-4">
+                  {/* Grid 3 điểm số thành phần */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Điểm Tốc độ */}
+                    <div className="bg-white p-3 rounded-lg border border-slate-100 flex flex-col justify-between shadow-sm">
+                      <span className="text-[11px] text-slate-500 font-medium">1. Điểm Tốc độ (Velocity)</span>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className="text-xl font-bold text-slate-800">{selectedTrend.score_breakdown.velocity_score}</span>
+                        <span className="text-xs text-slate-400">/100</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                        <div className="bg-blue-500 h-full rounded-full" style={{ width: `${selectedTrend.score_breakdown.velocity_score}%` }}></div>
+                      </div>
+                    </div>
+
+                    {/* Điểm Tương tác */}
+                    <div className="bg-white p-3 rounded-lg border border-slate-100 flex flex-col justify-between shadow-sm">
+                      <span className="text-[11px] text-slate-500 font-medium">2. Điểm Tương tác (Engagement)</span>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className="text-xl font-bold text-slate-800">{selectedTrend.score_breakdown.engagement_score}</span>
+                        <span className="text-xs text-slate-400">/100</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${selectedTrend.score_breakdown.engagement_score}%` }}></div>
+                      </div>
+                    </div>
+
+                    {/* Điểm Định tính AI */}
+                    <div className="bg-white p-3 rounded-lg border border-slate-100 flex flex-col justify-between shadow-sm">
+                      <span className="text-[11px] text-slate-500 font-medium">3. Điểm Định tính (AI Qualitative)</span>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className="text-xl font-bold text-slate-800">{selectedTrend.score_breakdown.ai_score}</span>
+                        <span className="text-xs text-slate-400">/100</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                        <div className="bg-purple-500 h-full rounded-full" style={{ width: `${selectedTrend.score_breakdown.ai_score}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Phần công thức tính và kết quả */}
+                  <div className="border-t border-slate-200/80 pt-3 text-xs text-slate-600 space-y-2">
+                    <div className="flex justify-between items-center bg-white/50 px-3 py-2 rounded-lg border border-slate-100">
+                      <span className="text-slate-500">↳ Điểm Định lượng ({selectedTrend.score_breakdown.velocity_weight}% Tốc độ + {selectedTrend.score_breakdown.engagement_weight}% Tương tác):</span>
+                      <span className="font-semibold text-slate-800">{selectedTrend.score_breakdown.quantitative_score}/100</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center bg-indigo-50/50 px-3 py-2.5 rounded-lg border border-indigo-100 text-sm font-semibold text-indigo-900">
+                      <span className="flex items-center gap-1.5">
+                        <Activity className="w-4 h-4 text-indigo-600" />
+                        Kết quả ({selectedTrend.score_breakdown.quantitative_weight}% Định lượng + {selectedTrend.score_breakdown.ai_weight}% AI)
+                      </span>
+                      <span className="text-base font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200">{selectedTrend.trend_score}/100</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-slate-500 italic text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  Trend được tạo trước phiên bản 2.0. Không có dữ liệu phân tích chi tiết.
+                </div>
+              )}
             </div>
 
             <div>
@@ -501,7 +537,7 @@ ${fixNL(trend.content_ideas)}`;
 
       {/* Modal Preview Telegram */}
       <Dialog open={!!previewTrend} onOpenChange={(open) => !open && setPreviewTrend(null)}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
                 <Activity className="w-5 h-5 text-blue-600" />
@@ -574,7 +610,7 @@ ${fixNL(trend.content_ideas)}`;
 
       {/* Modal từ chối & góp ý AI */}
       <Dialog open={!!rejectTrend} onOpenChange={(open) => !open && setRejectTrend(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <Trash2 className="w-5 h-5 text-red-600" />

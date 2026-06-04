@@ -1,0 +1,438 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trend-agent",
+        "options": {}
+      },
+      "id": "e4468f74-32c0-43eb-8e2b-f1deec20f31a",
+      "name": "Webhook (Từ Vercel)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "webhookId": "trend-agent-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $input.all()[0].json.body || $input.all()[0].json;\n\nif (typeof $workflow !== 'undefined' && $workflow.staticData) {\n    $workflow.staticData.totalTokens = 0; // Reset token về 0 cho phiên mới\n}\n\nreturn [\n  {\n    json: {\n      item_ids: input.item_ids || [],\n      category_id: input.category_id,\n      log_id: input.log_id,\n      app_url: 'https://trends-tools-v2.vercel.app'\n    }\n  }\n];"
+      },
+      "id": "code-init",
+      "name": "Khởi tạo Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "item_ids",
+        "options": {}
+      },
+      "id": "split-items",
+      "name": "Tách từng ID",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 15,
+        "options": {}
+      },
+      "id": "loop-node",
+      "name": "Lặp từng lô (15 bài)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nif (items.length === 0) return [];\nconst item_ids = items.map(e => e.json.item_ids).filter(Boolean);\nreturn [{\n    json: {\n        item_ids: item_ids\n    }\n}];"
+      },
+      "id": "group-batch",
+      "name": "Gom Lô để gọi API",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [950, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Khởi tạo Data').first().json.app_url }}/api/ai/analyze-batch",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "item_ids",
+              "value": "={{ $json.item_ids }}"
+            },
+            {
+              "name": "category_id",
+              "value": "={{ $('Khởi tạo Data').first().json.category_id }}"
+            },
+            {
+              "name": "log_id",
+              "value": "={{ $('Khởi tạo Data').first().json.log_id }}"
+            },
+            {
+              "name": "is_final_batch",
+              "value": "={{ $node['Lặp từng lô (15 bài)'].context.noItemsLeft }}"
+            },
+            {
+              "name": "accumulated_tokens",
+              "value": "={{ $workflow.staticData ? ($workflow.staticData.totalTokens || 0) : 0 }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "call-api",
+      "name": "Gọi Vercel API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const response = $input.all()[0].json;\nif (typeof $workflow !== 'undefined' && $workflow.staticData) {\n    $workflow.staticData.totalTokens = ($workflow.staticData.totalTokens || 0) + (response.tokens_used || 0);\n}\nreturn $input.all();"
+      },
+      "id": "accumulate-tokens",
+      "name": "Cộng dồn Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1280, 200]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{\n    json: {\n        done: true\n    }\n}];"
+      },
+      "id": "group-reduce",
+      "name": "Gom Kết Quả để Reduce",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [950, 450]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Khởi tạo Data').first().json.app_url }}/api/ai/get-raw-trends",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "category_id",
+              "value": "={{ $('Khởi tạo Data').first().json.category_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-context",
+      "name": "Lấy Bối Cảnh (Get Context)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1150, 450]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.raw_trends.length }}",
+              "operation": "larger",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "id": "check-trends-count",
+      "name": "Kiểm tra số lượng trend thô",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1350, 450]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $input.all()[0].json;\nconst rawTrends = input.raw_trends || [];\nconst memoryRules = input.memory_rules || [];\nconst approvedTrends = input.approved_trends || [];\nconst settings = input.settings || {};\n\nlet memoryPrompt = \"\";\nif (memoryRules.length > 0) {\n    memoryPrompt = `\\nQUY TẮC BỘ NHỚ LỊCH SỬ TỪ NGƯỜI DÙNG (BẮT BUỘC TUÂN THỦ TUYỆT ĐỐI):\\n`;\n    memoryRules.forEach((rule, idx) => {\n        memoryPrompt += `- [Quy tắc ${idx + 1} - Loại ${rule.rule_type}]: ${rule.user_feedback}`;\n        if (rule.example_case) {\n            memoryPrompt += ` (Ví dụ: ${rule.example_case})`;\n        }\n        memoryPrompt += `\\n`;\n    });\n}\n\nlet historyPrompt = \"\";\nif (approvedTrends.length > 0) {\n    historyPrompt = `\\nDANH SÁCH CÁC TREND ĐÃ DUYỆT GẦN ĐÂY (TRÁNH TRÙNG LẶP HOẶC TẠO LẠI TRÙNG):\\n(Dưới đây là các chủ đề đã được duyệt đăng gần đây. Nếu các video mới thuộc một trong các sự kiện này, hãy cân nhắc xem có phải sự kiện mới hay không. Nếu là cùng một sự kiện cũ, hãy bỏ qua không tạo trend mới để tránh lặp lại tin cũ trên kênh):\\n`;\n    approvedTrends.forEach((t, idx) => {\n        historyPrompt += `- Trend đã duyệt ${idx + 1}: ${t.trend_name} (${t.viral_reason})\\n`;\n    });\n}\n\nconst trendsContext = rawTrends.map((t, index) => {\n    return `Trend ${index + 1}:\n- Tên: ${t.trend_name}\n- Lý do Viral: ${t.viral_reason}\n- Video count: ${t.videos_count}\n- IDs bài viết: ${t.related_ids ? t.related_ids.join(', ') : t.crawled_data_id}\n`;\n}).join('\\n---\\n');\n\nconst base_prompt = \"Bạn là chuyên gia phân tích dữ liệu mạng xã hội (Data Scientist).\\nNhiệm vụ của bạn là gộp (Reduce) danh sách các Trend thô bị trùng lặp dưới đây thành một danh sách các Trend tinh hoa duy nhất.\\n\\nLUẬT GỘP TREND & LỌC ĐIỀU KIỆN (BẮT BUỘC):\\n1. Định nghĩa \\\"Trùng lặp\\\" để gộp:\\n   - CHỈ gộp các Trend thô nói về cùng 1 sự việc/sự kiện cụ thể (ví dụ: cùng một vụ cháy ở xưởng mút Hương Lộ 2, cùng một vụ án mẹ kế ở Quảng Ninh, cùng một sự việc anh Hoàng dùng bình cứu hỏa cứu người ở Hải Phòng, cùng một vụ bão/sóng lớn ở thành phố Nichinan Nhật Bản).\\n   - CHỈ gộp các Trend thô sử dụng chung 1 bài nhạc nền (music), cùng 1 format kịch bản (ví dụ: nhờ bố trông cá và cái kết, nắp mì tôm bói quẻ).\\n   - TUYỆT ĐỐI KHÔNG được gộp các sự việc/tin tức/chủ đề khác nhau vào chung một nhóm lớn mang tên chung chung (ví dụ: KHÔNG được gom các vụ án, vụ cháy, phạt xe khách khác nhau thành một trend chung mang tên \\\"Tin tức xã hội\\\", \\\"Vấn đề pháp luật\\\", \\\"Câu chuyện nhân văn\\\", v.v.). Mỗi sự việc/sự kiện cụ thể phải là một Trend riêng biệt.\\n\\n2. Phân rã (Split) các trend thô bị gom nhóm quá rộng:\\n   - Nếu trong danh sách các Trend thô đầu vào có chứa các trend bị gom nhóm quá rộng hoặc chứa nhiều sự việc khác nhau (ví dụ: 'Chuyện lạ đời/Tâm linh/Kỳ quái khó lý giải' chứa cả vụ chim lạ lẫn vụ giả chết và mì tôm; hoặc 'Tin tức xã hội' chứa cả vụ tôm chết lẫn cháy xưởng), bạn BẮT BUỘC phải phân rã (Split) chúng thành các trend cụ thể riêng biệt (ví dụ: tách thành 'Chú chim lạ đậu trên di ảnh ở Hưng Yên', 'Thanh niên giả chết để chia tay', 'Mì tôm bói quẻ Nhật Bản').\\n\\n3. Đặt \\\"Tên Trend\\\" cụ thể và chi tiết:\\n   - Tên Trend phải phản ánh đúng sự việc/kịch bản cụ thể đó (ví dụ: \\\"Hình ảnh sóng lớn dữ dội sau bão tại Nhật Bản\\\", \\\"Vụ cháy xưởng sản xuất mút tại Hương Lộ 2 TPHCM\\\", \\\"Anh hùng Hải Phòng dùng bình cứu hỏa giải cứu người phụ nữ bị đâm\\\").\\n   - Tuyệt đối không đặt tên bao quát, mơ hồ, mang tính danh mục chung chung.\\n\\n4. Phân tích & Bảo toàn điều kiện lọc tối thiểu:\\n   - Trend sau khi gộp hoặc đứng riêng lẻ phải thỏa mãn bộ lọc:\\n     * Có tổng cộng từ \" + settings.min_videos + \" bài viết (IDs) trở lên.\\n     * Xuất hiện ở từ \" + settings.min_channels + \" kênh khác nhau trở lên.\\n     Nếu không thỏa mãn cả hai điều kiện trên, hãy LOẠI BỎ hoàn toàn trend đó khỏi danh sách kết quả.\\n   - BẮT BUỘC giữ lại toàn bộ các trend riêng biệt thỏa mãn điều kiện lọc trên, tuyệt đối không được bỏ sót, tự ý xóa bỏ hoặc ngộp chung các trend đủ điều kiện vào nhau.\\n\\n5. Số lượng kênh và video: Bạn không cần đếm chính xác, hệ thống sẽ tự đếm dựa trên IDs bài viết bạn trả về. Bạn chỉ cần trả về mảng crawled_data_ids chứa TẤT CẢ các ID của các video thuộc Trend đã gộp.\";\n\nconst reflection_prompt = \"\\n\\nBƯỚC TỰ KIỂM LỖI & SỬ A SAI (REFLECTION LOOP):\\nTrước khi trả ra kết quả cuối cùng, hãy tự đóng vai trò là một người kiểm duyệt khó tính và đánh giá lại danh sách trend vừa dự thảo:\\n1. Đã có trend nào vi phạm quy tắc bộ nhớ ở trên chưa? (Ví dụ: Bạn có đang gom chung scandal trốn thuế của Ji Chang Wook và đám cưới của Hà Du Quân lại thành một nhóm \\\"Tin tức người nổi tiếng\\\" không? Nếu có, hãy tách chúng ra ngay lập tức thành hai trend riêng biệt!).\\n2. Tên các trend đã có địa danh cụ thể (ví dụ: Miền Tây, Hải Phòng, Đồng Nai...) nếu dữ liệu gốc có đề cập chưa?\\nHãy thực hiện sửa sai và chỉ trả về danh sách các trend đã được hoàn thiện 100%.\";\n\nconst fullPrompt = `${base_prompt}\\n${memoryPrompt}\\n${historyPrompt}\\n${reflection_prompt}\\n\\nDỮ LIỆU CÁC TREND THÔ:\\n${trendsContext}`;\n\nreturn [{\n    json: {\n        prompt: fullPrompt,\n        gemini_api_key: input.gemini_api_key,\n        raw_trends_count: rawTrends.length\n    }\n}];"
+      },
+      "id": "build-prompt",
+      "name": "Tạo Prompt Gộp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1550, 350]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={{ $json.gemini_api_key }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"{{ $json.prompt }}\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"responseMimeType\": \"application/json\",\n    \"responseSchema\": {\n      \"type\": \"ARRAY\",\n      \"description\": \"Danh sách các trends sau khi đã được gộp và lọc trùng\",\n      \"items\": {\n        \"type\": \"OBJECT\",\n        \"properties\": {\n          \"crawled_data_ids\": {\n            \"type\": \"ARRAY\",\n            \"items\": {\n              \"type\": \"STRING\"\n            },\n            \"description\": \"Mảng chứa toàn bộ các ID video thuộc về trend này\"\n          },\n          \"trend_name\": {\n            \"type\": \"STRING\",\n            \"description\": \"Tên trend ngắn gọn và bắt tai\"\n          },\n          \"viral_reason\": {\n            \"type\": \"STRING\",\n            \"description\": \"Lý do viral cụ thể\"\n          },\n          \"content_ideas\": {\n            \"type\": \"STRING\",\n            \"description\": \"Gợi ý chính xác 3 câu Hook (3 giây đầu) cực kỳ cuốn hút, kích thích sự tò mò để KOL/KOC bắt đầu video đu trend này hiệu quả (đánh số thứ tự 1, 2, 3).\"\n          },\n          \"expert_commentary\": {\n            \"type\": \"STRING\",\n            \"description\": \"Nhận xét chuyên gia từ AI\"\n          },\n          \"trend_score\": {\n            \"type\": \"INTEGER\",\n            \"description\": \"Điểm số AI tự đánh giá từ 0-100\"\n          }\n        },\n        \"required\": [\"crawled_data_ids\", \"trend_name\", \"viral_reason\", \"content_ideas\", \"expert_commentary\", \"trend_score\"]\n      }\n    }\n  }\n}"
+      },
+      "id": "call-gemini",
+      "name": "Gọi Gemini AI (N8N)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1750, 350]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const response = $input.all()[0].json;\nconst parts = response.candidates[0].content.parts[0].text;\nlet mergedTrends = [];\ntry {\n    mergedTrends = JSON.parse(parts);\n} catch(e) {}\n\nconst tokensUsed = response.usageMetadata ? response.usageMetadata.totalTokenCount : 0;\n\nreturn [{\n    json: {\n        merged_trends: mergedTrends,\n        response_raw: parts,\n        tokens_used: tokensUsed\n    }\n}];"
+      },
+      "id": "parse-response",
+      "name": "Parse Phản Hồi AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1950, 350]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Khởi tạo Data').first().json.app_url }}/api/ai/save-reduced-trends",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "log_id",
+              "value": "={{ $('Khởi tạo Data').first().json.log_id }}"
+            },
+            {
+              "name": "category_id",
+              "value": "={{ $('Khởi tạo Data').first().json.category_id }}"
+            },
+            {
+              "name": "accumulated_tokens",
+              "value": "={{ ($workflow.staticData ? ($workflow.staticData.totalTokens || 0) : 0) + ($node['Parse Phản Hồi AI'] ? ($node['Parse Phản Hồi AI'].json.tokens_used || 0) : 0) }}"
+            },
+            {
+              "name": "merged_trends",
+              "value": "={{ $json.merged_trends }}"
+            },
+            {
+              "name": "prompt_used",
+              "value": "={{ $('Tạo Prompt Gộp').first().json.prompt }}"
+            },
+            {
+              "name": "response_raw",
+              "value": "={{ $json.response_raw }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "save-results-success",
+      "name": "Lưu Kết Quả (Success)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2150, 350]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Khởi tạo Data').first().json.app_url }}/api/ai/save-reduced-trends",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "log_id",
+              "value": "={{ $('Khởi tạo Data').first().json.log_id }}"
+            },
+            {
+              "name": "category_id",
+              "value": "={{ $('Khởi tạo Data').first().json.category_id }}"
+            },
+            {
+              "name": "accumulated_tokens",
+              "value": "={{ $workflow.staticData ? ($workflow.staticData.totalTokens || 0) : 0 }}"
+            },
+            {
+              "name": "merged_trends",
+              "value": "=[]"
+            },
+            {
+              "name": "prompt_used",
+              "value": "Bỏ qua Reduce do số lượng trend thô <= 1"
+            },
+            {
+              "name": "response_raw",
+              "value": "Không có đủ dữ liệu để gộp"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "save-results-skip",
+      "name": "Lưu Kết Quả (Bỏ Qua)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1550, 550]
+    }
+  ],
+  "connections": {
+    "Webhook (Từ Vercel)": {
+      "main": [
+        [
+          {
+            "node": "Khởi tạo Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Khởi tạo Data": {
+      "main": [
+        [
+          {
+            "node": "Tách từng ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tách từng ID": {
+      "main": [
+        [
+          {
+            "node": "Lặp từng lô (15 bài)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lặp từng lô (15 bài)": {
+      "main": [
+        [
+          {
+            "node": "Gom Kết Quả để Reduce",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gom Lô để gọi API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gom Lô để gọi API": {
+      "main": [
+        [
+          {
+            "node": "Gọi Vercel API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gọi Vercel API": {
+      "main": [
+        [
+          {
+            "node": "Cộng dồn Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cộng dồn Token": {
+      "main": [
+        [
+          {
+            "node": "Lặp từng lô (15 bài)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gom Kết Quả để Reduce": {
+      "main": [
+        [
+          {
+            "node": "Lấy Bối Cảnh (Get Context)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lấy Bối Cảnh (Get Context)": {
+      "main": [
+        [
+          {
+            "node": "Kiểm tra số lượng trend thô",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kiểm tra số lượng trend thô": {
+      "main": [
+        [
+          {
+            "node": "Tạo Prompt Gộp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lưu Kết Quả (Bỏ Qua)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tạo Prompt Gộp": {
+      "main": [
+        [
+          {
+            "node": "Gọi Gemini AI (N8N)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gọi Gemini AI (N8N)": {
+      "main": [
+        [
+          {
+            "node": "Parse Phản Hồi AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Phản Hồi AI": {
+      "main": [
+        [
+          {
+            "node": "Lưu Kết Quả (Success)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

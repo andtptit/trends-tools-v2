@@ -5,6 +5,18 @@ export async function POST(request: Request) {
   try {
     const { category_id, total_items } = await request.json();
 
+    // Dọn sạch các trend thô (analyzed) cũ còn sót lại của danh mục này từ các phiên lỗi trước
+    let deleteQuery = supabaseAdmin.from('trends').delete().eq('status', 'analyzed');
+    if (category_id && category_id !== 'all') {
+        deleteQuery = deleteQuery.eq('category_id', category_id);
+    } else {
+        deleteQuery = deleteQuery.is('category_id', null);
+    }
+    const { error: deleteError } = await deleteQuery;
+    if (deleteError) {
+        console.warn("Lỗi khi dọn dẹp các trend thô cũ:", deleteError.message);
+    }
+
     const { data: logEntry, error } = await supabaseAdmin.from('ai_logs').insert({
         status: 'processing',
         response_raw: 'Đang bắt đầu phân tích...',
