@@ -2,6 +2,13 @@
 
 File này dùng để theo dõi các bản cập nhật phiên bản của hệ thống Trending Tools.
 
+## Version 3.0 Premium (05/06/2026)
+- **Tự động hóa luồng phân tích (Cron Webhook API):**
+  - Triển khai API `/api/cron/trigger-analysis` hỗ trợ các công cụ lập lịch bên ngoài (ví dụ `cron-job.org`).
+  - Lọc thông minh bài viết chưa phân tích (`is_analyzed = false`) theo Niche (`category_id`), thời gian (`hours`) và giới hạn số lượng bài đăng (`limit`).
+  - Tích hợp lớp bảo mật bảo vệ API bằng khóa bí mật `CRON_SECRET`.
+  - Tự động dọn dẹp dữ liệu trend thô cũ và kích hoạt n8n xử lý hàng loạt chạy ngầm thông qua webhook.
+
 ## Version 2.9 Premium (05/06/2026)
 - **Tính năng Xóa Nhật ký AI (Quản trị logs nâng cao):**
   - Tích hợp checkbox lựa chọn trên từng hàng và checkbox chọn tất cả ở tiêu đề bảng nhật ký.
