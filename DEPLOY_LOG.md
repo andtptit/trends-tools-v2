@@ -2,6 +2,22 @@
 
 File này dùng để theo dõi các bản cập nhật phiên bản của hệ thống Trending Tools.
 
+## Version 2.9 Premium (05/06/2026)
+- **Tính năng Xóa Nhật ký AI (Quản trị logs nâng cao):**
+  - Tích hợp checkbox lựa chọn trên từng hàng và checkbox chọn tất cả ở tiêu đề bảng nhật ký.
+  - Tích hợp thanh công cụ Banner nổi bật tự động xuất hiện khi có logs được chọn, hỗ trợ xóa hàng loạt hoặc hủy chọn.
+  - Thêm nút xóa đơn lẻ (Icon Trash2) trực tiếp trên từng hàng của bảng.
+  - Sử dụng Dialog xác nhận xóa sang trọng (Custom Confirm Dialog) để tránh hành động xóa nhầm dữ liệu.
+  - Gọi Supabase API thực hiện xóa bản ghi đồng thời tự động cập nhật lại danh sách và làm mới state.
+
+## Version 2.8 Premium (05/06/2026)
+- **Quản trị chi phí & Hiệu năng AI (AI Logs Analytics Dashboard):**
+  - Nâng cấp giao diện trang Nhật ký AI (`/ai-logs`) thành một Dashboard giám sát chi phí toàn diện.
+  - Tích hợp 4 thẻ thống kê KPI động: Tổng phiên chạy, Tổng token tiêu hao, Ước tính chi phí thực tế theo VNĐ, Tỷ lệ chạy thành công.
+  - Bổ sung bộ lọc nhanh tiện lợi theo Chủ đề Niche và theo Trạng thái phiên chạy (Thành công, Lỗi, Đang xử lý).
+  - Tích hợp cột Token và ước lượng chi phí VNĐ thực tế trực tiếp trong bảng danh sách (ước tính dựa trên tỷ lệ bình quân gia quyền của Gemini 2.5 Flash).
+  - Tích hợp chỉ báo màu sắc nổi bật cảnh báo các phiên chạy tiêu tốn lượng token lớn (>20,000 tokens).
+
 ## Version 2.7 Premium (04/06/2026)
 - **Tối ưu hóa & Khắc phục Timeout (N8N-based Reduce):**
   - Khắc phục triệt để lỗi timeout 10 giây (504 Gateway Timeout) của Vercel bằng cách chuyển dịch tác vụ gọi AI của bước Hợp nhất (Reduce) sang chạy trực tiếp trên N8N.
