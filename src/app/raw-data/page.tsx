@@ -11,8 +11,9 @@ import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { BrainCircuit, ExternalLink, Filter, Users, Bookmark, Clock, Hash, Music, Play, Layers, Trash2, CheckCircle2 } from "lucide-react";
+import { BrainCircuit, ExternalLink, Filter, Users, Bookmark, Clock, Hash, Music, Play, Layers, Trash2, CheckCircle2, Download, FileSpreadsheet } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import * as XLSX from "xlsx";
 
 const VIETNAMESE_STOP_WORDS = new Set([
   "thì", "mà", "là", "và", "của", "để", "cho", "trong", "ngoài", "đã", "đang", "sẽ", "được", "bị", "bởi", "tại", "ở",
@@ -106,6 +107,7 @@ export default function RawDataPage() {
   const [filterTime, setFilterTime] = useState("all"); // all, 24h
   const [minFans, setMinFans] = useState("");
   const [minCollect, setMinCollect] = useState("");
+  const [minViews, setMinViews] = useState("");
   const [onlyQualified, setOnlyQualified] = useState(false);
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
   const [selectedMusic, setSelectedMusic] = useState<string | null>(null);
@@ -153,7 +155,7 @@ export default function RawDataPage() {
     setSelectedMusic(null);
     setUseFilteredForFrequency(false);
     setCurrentPage(1);
-  }, [filterCategory, filterStatus, filterTime, minFans, minCollect, onlyQualified]);
+  }, [filterCategory, filterStatus, filterTime, minFans, minCollect, minViews, onlyQualified]);
 
   // Reset page when tags change
   useEffect(() => {
@@ -222,7 +224,11 @@ export default function RawDataPage() {
       query = query.gte('collect_count', parseInt(minCollect));
     }
 
-    const limitCount = onlyQualified ? 300 : 100;
+    if (minViews) {
+      query = query.gte('views_count', parseInt(minViews));
+    }
+
+    const limitCount = 500;
 
     const { data: rawData, error } = await query
       .order('views_count', { ascending: false }) 
@@ -412,6 +418,133 @@ export default function RawDataPage() {
     }
   };
 
+  const getExportData = () => {
+    return selectedIds.size > 0
+      ? displayedData.filter(item => selectedIds.has(item.id))
+      : displayedData;
+  };
+
+  const handleExportCSV = () => {
+    const dataToExport = getExportData();
+    if (dataToExport.length === 0) {
+      toast.error("Không có dữ liệu để xuất");
+      return;
+    }
+
+    const headers = [
+      "ID",
+      "Niche (Chủ đề)",
+      "Tác giả (Tên)",
+      "Username",
+      "Fans (Lượt theo dõi)",
+      "Xác minh",
+      "Nội dung",
+      "Kịch bản (Script)",
+      "Lượt xem",
+      "Lượt thích",
+      "Lượt lưu",
+      "Thời lượng (s)",
+      "Định dạng",
+      "Âm nhạc",
+      "Link bài viết",
+      "Trạng thái",
+      "Ngày đăng",
+      "Ngày cào"
+    ];
+
+    const rows = dataToExport.map(item => [
+      item.id || "",
+      item.categories?.name || "",
+      item.author_name || "",
+      item.author_username || "",
+      item.author_fans || 0,
+      item.author_verified ? "Đã xác minh" : "Không",
+      item.text_content || "",
+      item.transcript || "",
+      item.views_count || 0,
+      item.likes_count || 0,
+      item.collect_count || 0,
+      item.video_duration || 0,
+      item.is_slideshow ? "Album" : "Video",
+      item.music_name || "",
+      item.post_url || "",
+      item.is_analyzed ? "Đã phân tích" : "Chưa phân tích",
+      item.posted_at ? new Date(item.posted_at).toLocaleString('vi-VN') : "",
+      item.created_at ? new Date(item.created_at).toLocaleString('vi-VN') : ""
+    ]);
+
+    // Thêm UTF-8 BOM \uFEFF ở đầu file CSV
+    const csvContent = "\uFEFF" + [
+      headers.map(h => `"${h.replace(/"/g, '""')}"`).join(","),
+      ...rows.map(row => row.map(val => {
+        const strVal = typeof val === 'object' ? JSON.stringify(val) : String(val);
+        return `"${strVal.replace(/"/g, '""')}"`;
+      }).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `tiktok_crawled_data_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Đã xuất thành công ${dataToExport.length} dòng ra file CSV`);
+  };
+
+  const handleExportXLSX = () => {
+    const dataToExport = getExportData();
+    if (dataToExport.length === 0) {
+      toast.error("Không có dữ liệu để xuất");
+      return;
+    }
+
+    const worksheetData = dataToExport.map(item => ({
+      "ID": item.id || "",
+      "Niche (Chủ đề)": item.categories?.name || "",
+      "Tác giả (Tên)": item.author_name || "",
+      "Username": item.author_username || "",
+      "Fans (Lượt theo dõi)": item.author_fans || 0,
+      "Xác minh": item.author_verified ? "Đã xác minh" : "Không",
+      "Nội dung": item.text_content || "",
+      "Kịch bản (Script)": item.transcript || "",
+      "Lượt xem": item.views_count || 0,
+      "Lượt thích": item.likes_count || 0,
+      "Lượt lưu": item.collect_count || 0,
+      "Thời lượng (s)": item.video_duration || 0,
+      "Định dạng": item.is_slideshow ? "Album" : "Video",
+      "Âm nhạc": item.music_name || "",
+      "Link bài viết": item.post_url || "",
+      "Trạng thái": item.is_analyzed ? "Đã phân tích" : "Chưa phân tích",
+      "Ngày đăng": item.posted_at ? new Date(item.posted_at).toLocaleString('vi-VN') : "",
+      "Ngày cào": item.created_at ? new Date(item.created_at).toLocaleString('vi-VN') : ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Dữ liệu thô");
+
+    // Auto fit column widths
+    const maxCols = Object.keys(worksheetData[0] || {}).length;
+    worksheet['!cols'] = Array(maxCols).fill({ wch: 15 });
+    if (worksheet['!cols']) {
+      worksheet['!cols'][0] = { wch: 10 }; // ID
+      worksheet['!cols'][1] = { wch: 15 }; // Niche
+      worksheet['!cols'][2] = { wch: 20 }; // Tác giả
+      worksheet['!cols'][3] = { wch: 15 }; // Username
+      worksheet['!cols'][4] = { wch: 15 }; // Fans
+      worksheet['!cols'][5] = { wch: 12 }; // Xác minh
+      worksheet['!cols'][6] = { wch: 40 }; // Nội dung
+      worksheet['!cols'][7] = { wch: 40 }; // Kịch bản
+      worksheet['!cols'][13] = { wch: 20 }; // Âm nhạc
+      worksheet['!cols'][14] = { wch: 30 }; // Link bài viết
+    }
+
+    XLSX.writeFile(workbook, `tiktok_crawled_data_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success(`Đã xuất thành công ${dataToExport.length} dòng ra file XLSX`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -419,7 +552,7 @@ export default function RawDataPage() {
           <h2 className="text-2xl font-extrabold tracking-tight text-gray-900">Dữ liệu thô (Crawl)</h2>
           <p className="text-sm text-gray-500">Quản lý và lọc dữ liệu TikTok trước khi đưa vào phân tích AI</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
             {selectedIds.size > 0 && (
                 <Button onClick={handleDeleteBulk} variant="outline" className="h-10 border-red-200 text-red-600 hover:bg-red-50">
                     <Trash2 className="w-4 h-4 mr-2" />
@@ -428,6 +561,14 @@ export default function RawDataPage() {
             )}
             <Button onClick={handleSyncCategories} variant="outline" className="h-10 border-gray-200 text-gray-600 hover:bg-gray-50">
                Cập nhật Niche
+            </Button>
+            <Button onClick={handleExportCSV} variant="outline" className="h-10 border-gray-200 text-gray-600 hover:bg-gray-50">
+               <Download className="w-4 h-4 mr-2" />
+               Xuất CSV {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
+            </Button>
+            <Button onClick={handleExportXLSX} variant="outline" className="h-10 border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800">
+               <FileSpreadsheet className="w-4 h-4 mr-2" />
+               Xuất Excel {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
             </Button>
             <Button onClick={openAnalyzeModal} disabled={isAnalyzing} variant="default" className="h-10 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-md shadow-purple-200">
                <BrainCircuit className="w-4 h-4 mr-2" />
@@ -447,7 +588,7 @@ export default function RawDataPage() {
             </Button>
         </div>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 items-end">
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Chủ đề Niche</Label>
               <select 
@@ -490,6 +631,11 @@ export default function RawDataPage() {
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Fans tối thiểu</Label>
               <Input type="number" placeholder="1,000+" className="bg-gray-50/50 border-gray-100" value={minFans} onChange={(e) => setMinFans(e.target.value)} />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Lượt Xem tối thiểu</Label>
+              <Input type="number" placeholder="10,000+" className="bg-gray-50/50 border-gray-100" value={minViews} onChange={(e) => setMinViews(e.target.value)} />
             </div>
 
             <div className="space-y-2">
