@@ -819,7 +819,7 @@ export default function RawDataPage() {
                   <input type="checkbox" className="w-4 h-4 cursor-pointer" checked={displayedData.length > 0 && selectedIds.size === displayedData.length} onChange={toggleAll} />
                 </TableHead>
                 <TableHead className="w-28">Trạng thái</TableHead>
-                <TableHead className="w-28">Niche</TableHead>
+                <TableHead className="w-36">Niche</TableHead>
                 <TableHead className="w-44">Tác giả</TableHead>
                 <TableHead className="w-auto">Nội dung</TableHead>
                 <TableHead className="w-44 text-right">Metrics (View ↓)</TableHead>
@@ -844,9 +844,14 @@ export default function RawDataPage() {
                        <Badge variant="secondary" className="text-gray-400 font-normal">Chưa xử lý</Badge>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="overflow-hidden">
                     {item.categories ? (
-                      <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded">{item.categories.name}</span>
+                      <span 
+                        className="text-xs font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded inline-block max-w-full truncate animate-in fade-in duration-300" 
+                        title={item.categories.name}
+                      >
+                        {item.categories.name}
+                      </span>
                     ) : <span className="text-xs text-gray-400">-</span>}
                   </TableCell>
                   <TableCell className="font-medium max-w-[176px]">

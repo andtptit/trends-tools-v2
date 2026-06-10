@@ -390,11 +390,16 @@ export default function AILogsPage() {
                     <TableCell className="font-semibold text-slate-800">
                       {format(new Date(log.created_at), 'HH:mm dd/MM/yyyy')}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="overflow-hidden">
                       {log.categories ? (
-                        <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full">{log.categories.name}</span>
+                        <span 
+                          className="text-xs font-semibold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full inline-block max-w-full truncate" 
+                          title={log.categories.name}
+                        >
+                          {log.categories.name}
+                        </span>
                       ) : (
-                        <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full border">Toàn cầu</span>
+                        <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full border inline-block max-w-full truncate">Toàn cầu</span>
                       )}
                     </TableCell>
                     <TableCell>
