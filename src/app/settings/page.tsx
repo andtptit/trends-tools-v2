@@ -32,7 +32,8 @@ export default function SettingsPage() {
 
   // States for API URL Generator
   const [selectedNiche, setSelectedNiche] = useState("all");
-  const [apiLimit, setApiLimit] = useState("");
+  const [apiCrawlLimit, setApiCrawlLimit] = useState("");
+  const [apiAnalysisLimit, setApiAnalysisLimit] = useState("");
   const [apiHour, setApiHour] = useState("48");
   const [apiIsAnalyzed, setApiIsAnalyzed] = useState("false");
 
@@ -120,8 +121,8 @@ export default function SettingsPage() {
     const params = new URLSearchParams();
     params.set("secret", cronSecret);
     params.set("category_id", selectedNiche);
-    if (apiLimit) {
-      params.set("limit", apiLimit);
+    if (apiCrawlLimit) {
+      params.set("limit", apiCrawlLimit);
     }
     return `${domain}/api/crawl/auto-run?${params.toString()}`;
   };
@@ -140,8 +141,8 @@ export default function SettingsPage() {
     if (apiHour) {
       params.set("hours", apiHour);
     }
-    if (apiLimit) {
-      params.set("limit", apiLimit);
+    if (apiAnalysisLimit) {
+      params.set("limit", apiAnalysisLimit);
     }
     params.set("is_analyzed", apiIsAnalyzed);
     return `${domain}/api/cron/trigger-analysis?${params.toString()}`;
@@ -385,20 +386,6 @@ export default function SettingsPage() {
                 </div>
                 
                 <div className="space-y-1.5">
-                  <Label htmlFor="api_limit" className="text-xs font-bold text-slate-700">Limit (Giới hạn cào & phân tích)</Label>
-                  <Input 
-                    id="api_limit" 
-                    type="number"
-                    value={apiLimit} 
-                    onChange={(e) => setApiLimit(e.target.value)} 
-                    placeholder="Bỏ trống để dùng mặc định..."
-                    className="text-xs focus:ring-purple-500 bg-white"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
                   <Label htmlFor="api_hour" className="text-xs font-bold text-slate-700">Hour (Khoảng thời gian phân tích - giờ)</Label>
                   <Input 
                     id="api_hour" 
@@ -409,7 +396,35 @@ export default function SettingsPage() {
                     className="text-xs focus:ring-purple-500 bg-white"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="api_crawl_limit" className="text-xs font-bold text-slate-700">Limit cào dữ liệu (Crawl API)</Label>
+                  <Input 
+                    id="api_crawl_limit" 
+                    type="number"
+                    value={apiCrawlLimit} 
+                    onChange={(e) => setApiCrawlLimit(e.target.value)} 
+                    placeholder="Bỏ trống để dùng mặc định..."
+                    className="text-xs focus:ring-purple-500 bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="api_analysis_limit" className="text-xs font-bold text-slate-700">Limit phân tích AI (Gemini API)</Label>
+                  <Input 
+                    id="api_analysis_limit" 
+                    type="number"
+                    value={apiAnalysisLimit} 
+                    onChange={(e) => setApiAnalysisLimit(e.target.value)} 
+                    placeholder="Bỏ trống để dùng mặc định..."
+                    className="text-xs focus:ring-purple-500 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="is_analyzed_select" className="text-xs font-bold text-slate-700">is_analyzed (Đã phân tích hay chưa)</Label>
                   <select
@@ -451,7 +466,7 @@ export default function SettingsPage() {
                     {getCrawlUrl()}
                   </div>
                   <p className="text-xs text-slate-500 italic">
-                    Kích hoạt cào cho <span className="font-bold text-slate-700">{getCategoryName(selectedNiche)}</span>{apiLimit ? `, giới hạn tối đa ${apiLimit} video mỗi nguồn` : ' (sử dụng giới hạn mặc định hệ thống)'}.
+                    Kích hoạt cào cho <span className="font-bold text-slate-700">{getCategoryName(selectedNiche)}</span>{apiCrawlLimit ? `, giới hạn tối đa ${apiCrawlLimit} video mỗi nguồn` : ' (sử dụng giới hạn mặc định hệ thống)'}.
                   </p>
                 </div>
 
@@ -499,7 +514,7 @@ export default function SettingsPage() {
                     {getAnalysisUrl()}
                   </div>
                   <p className="text-xs text-slate-500 italic">
-                    Kích hoạt phân tích AI cho <span className="font-bold text-slate-700">{getCategoryName(selectedNiche)}</span> với dữ liệu cào trong <span className="font-bold text-slate-700">{apiHour || '48'} giờ</span> qua, giới hạn tối đa <span className="font-bold text-slate-700">{apiLimit || '300'}</span> bài viết, lọc trạng thái <span className="font-bold text-slate-700">is_analyzed = {apiIsAnalyzed}</span>.
+                    Kích hoạt phân tích AI cho <span className="font-bold text-slate-700">{getCategoryName(selectedNiche)}</span> với dữ liệu cào trong <span className="font-bold text-slate-700">{apiHour || '48'} giờ</span> qua, giới hạn tối đa <span className="font-bold text-slate-700">{apiAnalysisLimit || '300'}</span> bài viết, lọc trạng thái <span className="font-bold text-slate-700">is_analyzed = {apiIsAnalyzed}</span>.
                   </p>
                 </div>
               </div>
