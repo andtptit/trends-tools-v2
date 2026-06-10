@@ -27,7 +27,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [domain, setDomain] = useState("http://localhost:3000");
-  const [cronSecret, setCronSecret] = useState("qua_trinh_phan_tich_tu_dong_2026");
+  const [cronSecret, setCronSecret] = useState("andtptit");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // States for API URL Generator

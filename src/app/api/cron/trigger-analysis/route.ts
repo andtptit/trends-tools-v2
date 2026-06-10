@@ -13,8 +13,7 @@ export async function GET(request: Request) {
     const pruneDaysParam = searchParams.get('prune_days');
     const pruneDays = pruneDaysParam ? parseInt(pruneDaysParam) : 14;
 
-    // 1. Xác thực bảo mật bằng secret token
-    const cronSecret = process.env.CRON_SECRET || 'qua_trinh_phan_tich_tu_dong_2026';
+    const cronSecret = process.env.CRON_SECRET || 'andtptit';
     if (secret !== cronSecret) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

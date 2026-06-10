@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const category_id = searchParams.get('category_id') || 'all';
 
     // 1. Xác thực bảo mật bằng secret token
-    const cronSecret = process.env.CRON_SECRET || 'qua_trinh_phan_tich_tu_dong_2026';
+    const cronSecret = process.env.CRON_SECRET || 'andtptit';
     if (secret !== cronSecret) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
