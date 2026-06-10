@@ -1,86 +1,67 @@
-# Hướng dẫn Sử dụng API Cron Tự động Phân tích AI
+# Hướng dẫn Sử dụng API Cron Tự động Hóa
 
-Hệ thống cung cấp một API bảo mật `/api/cron/trigger-analysis` giúp các dịch vụ bên ngoài (như `cron-job.org` hoặc Vercel Crons) tự động kích hoạt luồng AI phân tích & gộp xu hướng thông qua n8n theo định kỳ hàng ngày.
+Hệ thống cung cấp bộ ba API bảo mật giúp các dịch vụ bên ngoài (như `cron-job.org` hoặc các công cụ tự động hóa như n8n) tự động kích hoạt luồng cào dữ liệu, kiểm tra tiến độ, và phân tích AI gom nhóm xu hướng theo lịch trình định kỳ.
 
 ---
 
-## 1. Thông tin Endpoint
+## 1. Danh sách các API Endpoint
 
+### API 1: Kích hoạt cào dữ liệu (Apify Crawl API)
+* **Đường dẫn**: `/api/crawl/auto-run`
+* **Phương thức**: `GET` hoặc `POST`
+* **Tham số**:
+  - `secret` (Bắt buộc): Mã khóa bảo mật so khớp với `CRON_SECRET` trên Vercel (mặc định là `andtptit`).
+  - `category_id` (Không bắt buộc, mặc định là `all`): 
+    - `all`: Cào mọi nguồn cào đang hoạt động.
+    - `global`: Chỉ cào các nguồn không thuộc danh mục nào.
+    - `[Category UUID]`: Chỉ cào các nguồn thuộc Niche tương ứng.
+  - `limit` (Không bắt buộc): Giới hạn số lượng bài viết tối đa cào về trên mỗi nguồn (ví dụ: `50`). Nếu bỏ trống sẽ dùng giới hạn mặc định trong cấu hình hệ thống.
+
+---
+
+### API 2: Kiểm tra trạng thái cào (Status Check API)
+* **Đường dẫn**: `/api/crawl/status`
+* **Phương thức**: `GET` hoặc `POST`
+* **Tham số**:
+  - `secret` (Bắt buộc): Mã bảo mật `CRON_SECRET` (`andtptit`).
+  - `category_id` (Không bắt buộc, mặc định là `all`): Phải khớp với `category_id` dùng lúc cào ở API 1.
+* **Nội dung trả về (JSON)**:
+  - Trả về `is_completed: true` nếu tất cả các nguồn cào thuộc danh mục này đã cào xong (không có nguồn nào ở trạng thái `running`).
+  - Trả về `is_completed: false` kèm danh sách các nguồn đang chạy (`running_sources`) nếu tiến trình cào vẫn chưa xong.
+
+---
+
+### API 3: Phân tích & Gộp xu hướng bằng AI (Gemini Analysis API)
 * **Đường dẫn**: `/api/cron/trigger-analysis`
-* **Phương thức hỗ trợ**: `GET` hoặc `POST`
-* **Mục đích**: Tự động lấy các bài viết cào mới chưa phân tích, khởi tạo phiên chạy log, và gửi lệnh sang n8n xử lý ngầm (đảm bảo không bị timeout).
+* **Phương thức**: `GET` hoặc `POST`
+* **Tham số**:
+  - `secret` (Bắt buộc): Mã bảo mật `CRON_SECRET` (`andtptit`).
+  - `category_id` (Không bắt buộc, mặc định là `all`): Lọc dữ liệu thô của Niche cần đem đi phân tích AI.
+  - `hours` (Không bắt buộc, mặc định là `48`): Khoảng thời gian cào dữ liệu gần đây (tính theo giờ) để lấy đi phân tích.
+  - `limit` (Không bắt buộc, mặc định là `300`): Giới hạn tối đa số lượng bài viết gửi lên Gemini trong phiên chạy này để kiểm soát token.
+  - `is_analyzed` (Không bắt buộc, mặc định là `false`):
+    - `false`: Chỉ quét phân tích những bài đăng thô chưa từng được phân tích.
+    - `true`: Cho phép phân tích cả các bài đăng cũ đã phân tích trước đó (dùng để kiểm thử lại dữ liệu thô).
 
 ---
 
-## 2. Các tham số yêu cầu (Query Parameters)
+## 2. Cấu hình biến bảo mật (Environment Variables)
 
-Bạn có thể truyền các tham số này trực tiếp trên URL gọi API:
-
-| Tham số | Loại | Bắt buộc | Mặc định | Mô tả |
-| :--- | :--- | :--- | :--- | :--- |
-| `secret` | String | **Có** | Không | Mã khóa bảo mật so khớp với biến môi trường `CRON_SECRET` để chống spam API. |
-| `category_id` | String | Không | `all` | Lọc bài đăng theo Niche:<br>- `all`: Phân tích mọi nguồn.<br>- `global`: Chỉ cào các nguồn không thuộc niche nào.<br>- `[UUID của Niche]`: Chỉ phân tích riêng cho Niche tương ứng (AI áp dụng prompt chuyên biệt). |
-| `hours` | Number | Không | `48` | Khoảng thời gian đăng tải/cào bài đăng gần đây (tính bằng giờ) để tránh phân tích lại bài quá cũ. |
-| `limit` | Number | Không | `300` | Giới hạn tối đa số lượng bài viết gửi đi xử lý trong một phiên. |
-
----
-
-## 3. Cấu hình Biến môi trường (Environment)
-
-Để thiết lập mã khóa bảo mật, thêm biến sau vào tệp cấu hình `.env.local` (hoặc cấu hình Environment Variables trên Vercel Dashboard):
+Để đổi mã khóa bảo mật hoặc tên miền, hãy khai báo trong file cấu hình `.env.local` (local) hoặc thêm vào mục **Environment Variables** trên Vercel Dashboard:
 
 ```env
-CRON_SECRET=qua_trinh_phan_tich_tu_dong_2026
+CRON_SECRET=andtptit
 ```
+
+> [!WARNING]
+> Tuyệt đối không chia sẻ mã `CRON_SECRET` ra ngoài để phòng ngừa spam API gây tốn chi phí cào Apify và Token Gemini AI.
 
 ---
 
-## 4. Các định dạng phản hồi (API Responses)
+## 3. Quy trình tích hợp khuyên dùng
 
-### Trường hợp 1: Truy cập trái phép (Sai hoặc thiếu `secret`)
-* **Mã lỗi**: `401 Unauthorized`
-* **Nội dung trả về**:
-```json
-{
-  "error": "Unauthorized"
-}
-```
+Để quy trình cào dữ liệu và phân tích AI hoạt động mượt mà mà không làm Vercel Serverless Function bị timeout (giới hạn 10 giây):
 
-### Trường hợp 2: Thành công nhưng không có bài viết mới để phân tích
-* **Mã lỗi**: `200 OK`
-* **Nội dung trả về**:
-```json
-{
-  "success": true,
-  "message": "Không có bài đăng mới nào thỏa mãn điều kiện cần phân tích.",
-  "items_count": 0
-}
-```
-
-### Trường hợp 3: Thành công kích hoạt phân tích ngầm qua n8n
-* **Mã lỗi**: `200 OK`
-* **Nội dung trả về**:
-```json
-{
-  "success": true,
-  "message": "Đã kích hoạt phân tích tự động thành công cho 42 bài đăng.",
-  "log_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3d4f55",
-  "items_count": 42
-}
-```
-
----
-
-## 5. Hướng dẫn thiết lập chạy tự động hàng ngày (Cron Job)
-
-Để hệ thống hoạt động hoàn toàn tự động hàng ngày (ví dụ chạy lúc 6:00 sáng):
-
-1. **Bước 1: Lập lịch cào bài viết**
-   - Đăng ký công việc (Job) trên `cron-job.org` chạy lúc **6:00 AM**.
-   - URL gọi: `GET https://[domain-cua-ban]/api/crawl/auto-run`
-   - Nhiệm vụ: Tự động chạy Apify để cào các bài đăng mới lưu vào database (mất từ 3 - 5 phút).
-
-2. **Bước 2: Lập lịch phân tích AI & Gộp bài viết**
-   - Đăng ký công việc (Job) trên `cron-job.org` chạy lúc **6:30 AM** (lệch 30 phút để cào xong dữ liệu).
-   - URL gọi: `GET https://[domain-cua-ban]/api/cron/trigger-analysis?secret=qua_trinh_phan_tich_tu_dong_2026&hours=24`
-   - Nhiệm vụ: Gom tất cả bài cào mới trong 24h qua và gọi n8n phân tích.
+1. **Kích hoạt cào:** Gọi API 1 để khởi động tiến trình cào ngầm trên Apify. API này sẽ trả về phản hồi lập tức.
+2. **Kiểm tra trạng thái:** Thiết lập vòng lặp gọi API 2 định kỳ mỗi 30 giây để kiểm tra xem Apify đã cào xong dữ liệu thô vào cơ sở dữ liệu hay chưa.
+3. **Kích hoạt phân tích:** Khi API 2 trả về `is_completed: true`, tiến hành gọi API 3 để khởi chạy luồng phân tích gộp xu hướng bằng AI ngầm thông qua n8n.
