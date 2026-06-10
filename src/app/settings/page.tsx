@@ -19,7 +19,8 @@ export default function SettingsPage() {
     base_ai_prompt: "Bạn là một chuyên gia phân tích dữ liệu mạng xã hội và nghiên cứu xu hướng (Trend Analyst). Hãy khắt khe trong việc đánh giá và đưa ra kịch bản thật viral.",
     trend_score_quantitative_weight: "70",
     trend_score_velocity_weight: "60",
-    trend_score_min_views_viral: "15000"
+    trend_score_min_views_viral: "15000",
+    enable_realtime_frequency: "true"
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -139,6 +140,24 @@ export default function SettingsPage() {
                 value={settings.actor_tiktok_scraper} 
                 onChange={(e) => updateSetting('actor_tiktok_scraper', e.target.value)} 
               />
+            </div>
+          </div>
+
+          <div className="flex items-start space-x-2.5 pt-2">
+            <input 
+              id="enable_frequency" 
+              type="checkbox"
+              checked={settings.enable_realtime_frequency === "true"} 
+              onChange={(e) => updateSetting('enable_realtime_frequency', e.target.checked ? "true" : "false")} 
+              className="w-4 h-4 cursor-pointer rounded border-gray-300 text-purple-600 focus:ring-purple-500 mt-1"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="enable_frequency" className="cursor-pointer font-bold text-slate-800 text-sm">
+                Kích hoạt Phân tích cụm từ & âm nhạc nổi bật ở trang Dữ liệu thô (Realtime Frequency Widget)
+              </Label>
+              <p className="text-xs text-gray-500">
+                Hãy tắt tùy chọn này nếu lượng dữ liệu thô cào về cực lớn để tăng tốc độ tải trang Dữ liệu thô.
+              </p>
             </div>
           </div>
 

@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { BrainCircuit, ExternalLink, Filter, Users, Bookmark, Clock, Hash, Music, Play, Layers, Trash2, CheckCircle2, Download, FileSpreadsheet } from "lucide-react";
+import { BrainCircuit, ExternalLink, Filter, Users, Bookmark, Clock, Hash, Music, Play, Layers, Trash2, CheckCircle2, Download, FileSpreadsheet, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import * as XLSX from "xlsx";
 
@@ -114,6 +114,19 @@ export default function RawDataPage() {
   const [useFilteredForFrequency, setUseFilteredForFrequency] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 25;
+  const [enableFrequency, setEnableFrequency] = useState(true);
+
+  const [sortField, setSortField] = useState<string>("views_count");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
 
   // Detail Modal state
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
@@ -147,6 +160,7 @@ export default function RawDataPage() {
 
   useEffect(() => {
     fetchCategories();
+    fetchSettings();
   }, []);
 
   useEffect(() => {
@@ -177,12 +191,40 @@ export default function RawDataPage() {
         (item.music_name || "").toLowerCase() === mus
       );
     }
-    return result;
-  }, [data, selectedKeyword, selectedMusic]);
+
+    // Áp dụng sắp xếp dữ liệu
+    return [...result].sort((a, b) => {
+      let aVal: any = a[sortField];
+      let bVal: any = b[sortField];
+
+      // Các trường hợp đặc biệt
+      if (sortField === 'niche') {
+        aVal = a.categories?.name || "";
+        bVal = b.categories?.name || "";
+      } else if (sortField === 'posted_at') {
+        aVal = a.posted_at ? new Date(a.posted_at).getTime() : 0;
+        bVal = b.posted_at ? new Date(b.posted_at).getTime() : 0;
+      }
+
+      if (aVal === undefined || aVal === null) return 1;
+      if (bVal === undefined || bVal === null) return -1;
+
+      if (typeof aVal === 'string') {
+        return sortDirection === 'asc' 
+          ? aVal.localeCompare(bVal, 'vi')
+          : bVal.localeCompare(aVal, 'vi');
+      } else {
+        return sortDirection === 'asc'
+          ? aVal - bVal
+          : bVal - aVal;
+      }
+    });
+  }, [data, selectedKeyword, selectedMusic, sortField, sortDirection]);
 
   const frequencies = useMemo(() => {
+    if (!enableFrequency) return { topUnigrams: [], topBigrams: [], topMusic: [] };
     return analyzeFrequency(useFilteredForFrequency ? displayedData : data);
-  }, [data, displayedData, useFilteredForFrequency]);
+  }, [data, displayedData, useFilteredForFrequency, enableFrequency]);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -194,6 +236,20 @@ export default function RawDataPage() {
   const fetchCategories = async () => {
     const { data } = await supabase.from('categories').select('*');
     if (data) setCategories(data);
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const { data } = await supabase.from('system_settings').select('*');
+      if (data) {
+        const frequencySetting = data.find(s => s.key === 'enable_realtime_frequency');
+        if (frequencySetting) {
+          setEnableFrequency(frequencySetting.value === 'true');
+        }
+      }
+    } catch (e) {
+      console.error("Lỗi khi tải cấu hình:", e);
+    }
   };
 
   const fetchData = async () => {
@@ -677,7 +733,7 @@ export default function RawDataPage() {
       </Card>
 
       {/* Realtime Frequency Widget */}
-      {data.length > 0 && (
+      {enableFrequency && data.length > 0 && (
         <Card className="border-none shadow-sm bg-white overflow-hidden">
           <div className="bg-purple-50/30 px-6 py-3 border-b flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold text-purple-900">
@@ -818,13 +874,48 @@ export default function RawDataPage() {
                 <TableHead className="w-12 text-center px-4">
                   <input type="checkbox" className="w-4 h-4 cursor-pointer" checked={displayedData.length > 0 && selectedIds.size === displayedData.length} onChange={toggleAll} />
                 </TableHead>
-                <TableHead className="w-28">Trạng thái</TableHead>
-                <TableHead className="w-36">Niche</TableHead>
-                <TableHead className="w-44">Tác giả</TableHead>
-                <TableHead className="w-auto">Nội dung</TableHead>
-                <TableHead className="w-44 text-right">Metrics (View ↓)</TableHead>
-                <TableHead className="w-32">Thời gian</TableHead>
-                <TableHead className="w-24 text-center"></TableHead>
+                <TableHead className="w-28 cursor-pointer hover:bg-gray-150 transition-colors select-none" onClick={() => handleSort('is_analyzed')}>
+                  <div className="flex items-center gap-1">
+                    Trạng thái
+                    {sortField === 'is_analyzed' ? (
+                      sortDirection === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-purple-600" /> : <ChevronDown className="w-3.5 h-3.5 text-purple-600" />
+                    ) : <ArrowUpDown className="w-3 h-3 text-gray-300" />}
+                  </div>
+                </TableHead>
+                <TableHead className="w-36 cursor-pointer hover:bg-gray-150 transition-colors select-none" onClick={() => handleSort('niche')}>
+                  <div className="flex items-center gap-1">
+                    Niche
+                    {sortField === 'niche' ? (
+                      sortDirection === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-purple-600" /> : <ChevronDown className="w-3.5 h-3.5 text-purple-600" />
+                    ) : <ArrowUpDown className="w-3 h-3 text-gray-300" />}
+                  </div>
+                </TableHead>
+                <TableHead className="w-44 cursor-pointer hover:bg-gray-150 transition-colors select-none" onClick={() => handleSort('author_fans')}>
+                  <div className="flex items-center gap-1">
+                    Tác giả (Kênh)
+                    {sortField === 'author_fans' ? (
+                      sortDirection === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-purple-600" /> : <ChevronDown className="w-3.5 h-3.5 text-purple-600" />
+                    ) : <ArrowUpDown className="w-3 h-3 text-gray-300" />}
+                  </div>
+                </TableHead>
+                <TableHead className="w-auto animate-none select-none">Nội dung</TableHead>
+                <TableHead className="w-44 text-right cursor-pointer hover:bg-gray-150 transition-colors select-none" onClick={() => handleSort('views_count')}>
+                  <div className="flex items-center justify-end gap-1">
+                    Metrics
+                    {sortField === 'views_count' ? (
+                      sortDirection === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-purple-600" /> : <ChevronDown className="w-3.5 h-3.5 text-purple-600" />
+                    ) : <ArrowUpDown className="w-3 h-3 text-gray-300" />}
+                  </div>
+                </TableHead>
+                <TableHead className="w-32 cursor-pointer hover:bg-gray-150 transition-colors select-none" onClick={() => handleSort('posted_at')}>
+                  <div className="flex items-center gap-1">
+                    Thời gian đăng
+                    {sortField === 'posted_at' ? (
+                      sortDirection === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-purple-600" /> : <ChevronDown className="w-3.5 h-3.5 text-purple-600" />
+                    ) : <ArrowUpDown className="w-3 h-3 text-gray-300" />}
+                  </div>
+                </TableHead>
+                <TableHead className="w-24 text-center select-none"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
