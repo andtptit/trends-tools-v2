@@ -447,7 +447,7 @@ export default function SettingsPage() {
                       Copy URL
                     </Button>
                   </div>
-                  <div className="font-mono text-xs text-slate-800 bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto select-all mb-2 shadow-inner">
+                  <div className="font-mono text-xs bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto select-all mb-2 shadow-inner">
                     {getCrawlUrl()}
                   </div>
                   <p className="text-xs text-slate-500 italic">
@@ -471,7 +471,7 @@ export default function SettingsPage() {
                       Copy URL
                     </Button>
                   </div>
-                  <div className="font-mono text-xs text-slate-800 bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto select-all mb-2 shadow-inner">
+                  <div className="font-mono text-xs bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto select-all mb-2 shadow-inner">
                     {getStatusUrl()}
                   </div>
                   <p className="text-xs text-slate-500 italic">
@@ -495,7 +495,7 @@ export default function SettingsPage() {
                       Copy URL
                     </Button>
                   </div>
-                  <div className="font-mono text-xs text-slate-800 bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto select-all mb-2 shadow-inner">
+                  <div className="font-mono text-xs bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto select-all mb-2 shadow-inner">
                     {getAnalysisUrl()}
                   </div>
                   <p className="text-xs text-slate-500 italic">
