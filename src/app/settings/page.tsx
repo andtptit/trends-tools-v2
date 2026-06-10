@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Save, Info, Brain } from "lucide-react";
+import { Save, Info, Brain, Copy, Check, Cpu } from "lucide-react";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
@@ -22,10 +23,19 @@ export default function SettingsPage() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [domain, setDomain] = useState("http://localhost:3000");
+  const [cronSecret, setCronSecret] = useState("qua_trinh_phan_tich_tu_dong_2026");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
   const supabase = createClient();
 
   useEffect(() => {
     fetchSettings();
+    fetchCategories();
+    if (typeof window !== "undefined") {
+      setDomain(window.location.origin);
+    }
   }, []);
 
   const fetchSettings = async () => {
@@ -73,6 +83,22 @@ export default function SettingsPage() {
 
   const updateSetting = (key: string, value: string) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase.from('categories').select('id, name');
+      if (data) setCategories(data);
+    } catch (e) {
+      console.error("Lỗi khi tải danh mục:", e);
+    }
+  };
+
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    toast.success("Đã copy thành công!");
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   if (loading) return <div className="p-8">Đang tải cấu hình...</div>;
@@ -192,6 +218,201 @@ export default function SettingsPage() {
             <Save className="w-4 h-4" />
             {saving ? 'Đang lưu...' : 'Lưu cài đặt AI'}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="border-none shadow-sm bg-white overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-slate-900 to-slate-800 text-white">
+          <CardTitle className="flex items-center gap-2 text-lg font-bold">
+            <Cpu className="w-5 h-5 text-blue-400" />
+            Công cụ Tích hợp API (cho n8n / Cron Jobs)
+          </CardTitle>
+          <CardDescription className="text-slate-300 text-xs">
+            Sinh mã URL API tự động kèm đầy đủ tham số để đưa vào các công cụ tự động hóa như n8n hoặc cron-job.org.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-6 space-y-6">
+          <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3 text-xs text-blue-700 leading-relaxed">
+            <Info className="w-5 h-5 shrink-0 text-blue-500" />
+            <div>
+              <p className="font-semibold mb-1">Hướng dẫn nhanh:</p>
+              <p>Mặc định URL sử dụng tên miền hiện tại là <span className="font-mono bg-blue-100 px-1 rounded">{domain}</span>. Nếu chạy local và test webhook Apify, hãy nhập URL Tunnel công khai (như Ngrok) vào ô dưới đây để tự động thay đổi URL.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="api_domain" className="text-xs font-bold text-slate-500">Tên miền API (Domain)</Label>
+              <Input 
+                id="api_domain" 
+                value={domain} 
+                onChange={(e) => setDomain(e.target.value)} 
+                className="text-xs"
+                placeholder="Ví dụ: https://xxxx.ngrok-free.app hoặc https://trends-tools-v2.vercel.app"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="api_secret" className="text-xs font-bold text-slate-500">Mã bảo mật (CRON_SECRET)</Label>
+              <Input 
+                id="api_secret" 
+                value={cronSecret} 
+                onChange={(e) => setCronSecret(e.target.value)} 
+                className="text-xs font-mono"
+                placeholder="Nhập mã bảo mật của bạn"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-2">
+            <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Danh sách API theo từng Niche</h4>
+            <div className="border border-slate-100 rounded-xl overflow-hidden shadow-sm">
+              <Table className="w-full text-xs">
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead className="w-28 font-bold text-slate-700">Niche (Danh mục)</TableHead>
+                    <TableHead className="w-32 font-bold text-slate-700">ID Danh mục</TableHead>
+                    <TableHead className="font-bold text-slate-700">Đường dẫn API tương ứng</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {/* Dành cho tất cả */}
+                  <TableRow className="hover:bg-slate-50/50">
+                    <TableCell className="font-bold text-slate-800">Tất cả Niche (All)</TableCell>
+                    <TableCell className="font-mono text-slate-400">all</TableCell>
+                    <TableCell className="space-y-2 py-3">
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded border border-slate-100">
+                          <div className="truncate">
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Cào dữ liệu (Apify)</span>
+                            <span className="font-mono truncate select-all">{`${domain}/api/crawl/auto-run?secret=${cronSecret}&category_id=all`}</span>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 px-2 flex items-center gap-1 hover:bg-slate-200 shrink-0"
+                            onClick={() => handleCopy(`${domain}/api/crawl/auto-run?secret=${cronSecret}&category_id=all`, 'crawl-all')}
+                          >
+                            {copiedId === 'crawl-all' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                            Copy
+                          </Button>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded border border-slate-100">
+                          <div className="truncate">
+                            <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Kiểm tra trạng thái (Status Check)</span>
+                            <span className="font-mono truncate select-all">{`${domain}/api/crawl/status?secret=${cronSecret}&category_id=all`}</span>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 px-2 flex items-center gap-1 hover:bg-slate-200 shrink-0"
+                            onClick={() => handleCopy(`${domain}/api/crawl/status?secret=${cronSecret}&category_id=all`, 'status-all')}
+                          >
+                            {copiedId === 'status-all' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                            Copy
+                          </Button>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded border border-slate-100">
+                          <div className="truncate">
+                            <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">Phân tích & Gộp AI (Gemini)</span>
+                            <span className="font-mono truncate select-all">{`${domain}/api/cron/trigger-analysis?secret=${cronSecret}&category_id=all&hours=48`}</span>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 px-2 flex items-center gap-1 hover:bg-slate-200 shrink-0"
+                            onClick={() => handleCopy(`${domain}/api/cron/trigger-analysis?secret=${cronSecret}&category_id=all&hours=48`, 'analysis-all')}
+                          >
+                            {copiedId === 'analysis-all' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                            Copy
+                          </Button>
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  
+                  {/* Danh sách từng Niche */}
+                  {categories.map((cat) => {
+                    const crawlUrl = `${domain}/api/crawl/auto-run?secret=${cronSecret}&category_id=${cat.id}`;
+                    const statusUrl = `${domain}/api/crawl/status?secret=${cronSecret}&category_id=${cat.id}`;
+                    const analysisUrl = `${domain}/api/cron/trigger-analysis?secret=${cronSecret}&category_id=${cat.id}&hours=48`;
+                    
+                    return (
+                      <TableRow key={cat.id} className="hover:bg-slate-50/50">
+                        <TableCell className="font-semibold text-slate-800">{cat.name}</TableCell>
+                        <TableCell className="py-3">
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono text-slate-500 truncate max-w-[100px]" title={cat.id}>{cat.id}</span>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-6 w-6 p-0 hover:bg-slate-200"
+                              onClick={() => handleCopy(cat.id, `id-${cat.id}`)}
+                            >
+                              {copiedId === `id-${cat.id}` ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-400" />}
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="space-y-2 py-3">
+                          <div className="flex flex-col gap-1.5">
+                            {/* Crawl URL */}
+                            <div className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded border border-slate-100">
+                              <div className="truncate">
+                                <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Cào dữ liệu (Apify)</span>
+                                <span className="font-mono truncate select-all">{crawlUrl}</span>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 px-2 flex items-center gap-1 hover:bg-slate-200 shrink-0"
+                                onClick={() => handleCopy(crawlUrl, `crawl-${cat.id}`)}
+                              >
+                                {copiedId === `crawl-${cat.id}` ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                                Copy
+                              </Button>
+                            </div>
+                            
+                            {/* Status Check URL */}
+                            <div className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded border border-slate-100">
+                              <div className="truncate">
+                                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Kiểm tra trạng thái (Status Check)</span>
+                                <span className="font-mono truncate select-all">{statusUrl}</span>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 px-2 flex items-center gap-1 hover:bg-slate-200 shrink-0"
+                                onClick={() => handleCopy(statusUrl, `status-${cat.id}`)}
+                              >
+                                {copiedId === `status-${cat.id}` ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                                Copy
+                              </Button>
+                            </div>
+
+                            {/* Analysis URL */}
+                            <div className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded border border-slate-100">
+                              <div className="truncate">
+                                <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block">Phân tích & Gộp AI (Gemini)</span>
+                                <span className="font-mono truncate select-all">{analysisUrl}</span>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 px-2 flex items-center gap-1 hover:bg-slate-200 shrink-0"
+                                onClick={() => handleCopy(analysisUrl, `analysis-${cat.id}`)}
+                              >
+                                {copiedId === `analysis-${cat.id}` ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                                Copy
+                              </Button>
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

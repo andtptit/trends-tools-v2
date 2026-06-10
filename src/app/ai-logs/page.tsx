@@ -31,6 +31,7 @@ export default function AILogsPage() {
   // Filter states
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterTrigger, setFilterTrigger] = useState("all");
 
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -92,9 +93,15 @@ export default function AILogsPage() {
         (filterCategory === 'global' && !log.category_id) || 
         log.category_id === filterCategory;
       const matchStatus = filterStatus === 'all' || log.status === filterStatus;
-      return matchCategory && matchStatus;
+      
+      const isManual = !log.trigger_type || log.trigger_type === 'manual';
+      const matchTrigger = filterTrigger === 'all' || 
+        (filterTrigger === 'manual' && isManual) || 
+        (filterTrigger === 'api' && log.trigger_type === 'api');
+
+      return matchCategory && matchStatus && matchTrigger;
     });
-  }, [logs, filterCategory, filterStatus]);
+  }, [logs, filterCategory, filterStatus, filterTrigger]);
 
   // Tính toán KPI Stats trên danh sách đã lọc
   const stats = useMemo(() => {
@@ -290,6 +297,20 @@ export default function AILogsPage() {
               <option value="error">Lỗi</option>
             </select>
           </div>
+
+          {/* Trigger Type Filter */}
+          <div className="flex flex-col gap-1 w-full sm:w-48">
+            <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Nguồn kích hoạt</label>
+            <select 
+              value={filterTrigger}
+              onChange={(e) => setFilterTrigger(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-gray-200 bg-gray-50/50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+            >
+              <option value="all">Tất cả nguồn</option>
+              <option value="manual">Thủ công 👤</option>
+              <option value="api">Tự động (API) 🤖</option>
+            </select>
+          </div>
         </CardContent>
       </Card>
 
@@ -338,6 +359,7 @@ export default function AILogsPage() {
                 </TableHead>
                 <TableHead className="w-44">Thời gian</TableHead>
                 <TableHead className="w-36">Niche</TableHead>
+                <TableHead className="w-32">Nguồn</TableHead>
                 <TableHead className="w-28 text-center">Bài xử lý</TableHead>
                 <TableHead className="w-28 text-center">Trend đã gộp</TableHead>
                 <TableHead className="w-48">Token & Chi phí</TableHead>
@@ -347,9 +369,9 @@ export default function AILogsPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-10">Đang tải dữ liệu...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-10">Đang tải dữ liệu...</TableCell></TableRow>
               ) : filteredLogs.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-500">Không tìm thấy lịch sử phân tích nào khớp.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-500">Không tìm thấy lịch sử phân tích nào khớp.</TableCell></TableRow>
               ) : filteredLogs.map((log) => {
                 const tokens = getLogTokens(log);
                 const cost = calculateCost(tokens);
@@ -373,6 +395,17 @@ export default function AILogsPage() {
                         <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full">{log.categories.name}</span>
                       ) : (
                         <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full border">Toàn cầu</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {log.trigger_type === 'api' ? (
+                        <span className="text-xs font-semibold text-indigo-750 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 flex items-center gap-1 w-fit">
+                          🤖 Tự động
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold text-slate-750 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100 flex items-center gap-1 w-fit">
+                          👤 Thủ công
+                        </span>
                       )}
                     </TableCell>
                     <TableCell className="text-center font-bold text-slate-700">{log.items_analyzed}</TableCell>
@@ -432,7 +465,7 @@ export default function AILogsPage() {
           </DialogHeader>
           <div className="space-y-5 py-4">
             {/* Run info grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-inner">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-inner">
               <div className="bg-white p-3 rounded-lg border border-slate-100/80 shadow-sm">
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Trạng thái</span>
                 <p className="font-semibold text-xs mt-1">
@@ -442,6 +475,12 @@ export default function AILogsPage() {
               <div className="bg-white p-3 rounded-lg border border-slate-100/80 shadow-sm">
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Model phân tích</span>
                 <p className="font-semibold text-xs mt-1 text-slate-700">Gemini 2.5 Flash</p>
+              </div>
+              <div className="bg-white p-3 rounded-lg border border-slate-100/80 shadow-sm">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Nguồn kích hoạt</span>
+                <p className="font-semibold text-xs mt-1 text-indigo-700">
+                  {selectedLog?.trigger_type === 'api' ? '🤖 Tự động (API)' : '👤 Thủ công'}
+                </p>
               </div>
               <div className="bg-white p-3 rounded-lg border border-slate-100/80 shadow-sm">
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Trends thu về</span>

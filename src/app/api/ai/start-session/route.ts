@@ -22,7 +22,8 @@ export async function POST(request: Request) {
         response_raw: 'Đang bắt đầu phân tích...',
         items_analyzed: 0,
         trends_found: 0,
-        category_id: category_id === 'all' ? null : category_id
+        category_id: category_id === 'all' ? null : category_id,
+        trigger_type: 'manual'
     }).select().single();
 
     if (error || !logEntry) {
