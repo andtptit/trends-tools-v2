@@ -8,6 +8,10 @@ export async function GET(request: Request) {
     const category_id = searchParams.get('category_id') || 'all';
     const hours = parseInt(searchParams.get('hours') || '48');
     const limit = parseInt(searchParams.get('limit') || '300');
+    const isAnalyzedParam = searchParams.get('is_analyzed');
+    const isAnalyzed = isAnalyzedParam === 'true'; // Mặc định là false (chỉ bài chưa phân tích)
+    const pruneDaysParam = searchParams.get('prune_days');
+    const pruneDays = pruneDaysParam ? parseInt(pruneDaysParam) : 14;
 
     // 1. Xác thực bảo mật bằng secret token
     const cronSecret = process.env.CRON_SECRET || 'qua_trinh_phan_tich_tu_dong_2026';
@@ -15,11 +19,25 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Tìm danh sách bài viết chưa phân tích (is_analyzed = false)
+    // Tự động dọn dẹp các bài đăng cũ đã được phân tích để tránh tràn bộ nhớ DB
+    if (pruneDays > 0) {
+      const pruneThreshold = new Date(Date.now() - pruneDays * 24 * 60 * 60 * 1000).toISOString();
+      const { error: pruneError } = await supabaseAdmin
+        .from('crawled_data')
+        .delete()
+        .eq('is_analyzed', true)
+        .lt('created_at', pruneThreshold);
+
+      if (pruneError) {
+        console.warn("Lỗi khi tự động dọn dẹp crawled_data cũ:", pruneError.message);
+      }
+    }
+
+    // 2. Tìm danh sách bài viết theo bộ lọc phân tích (mặc định là chưa phân tích)
     let query = supabaseAdmin
       .from('crawled_data')
       .select('id')
-      .eq('is_analyzed', false);
+      .eq('is_analyzed', isAnalyzed);
 
     // Lọc theo Niche/Category
     if (category_id) {

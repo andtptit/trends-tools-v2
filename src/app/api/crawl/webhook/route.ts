@@ -14,16 +14,18 @@ export async function POST(request: Request) {
     // Apify gửi webhook payload dưới dạng JSON
     const payload = await request.json();
     
-    // Chỉ xử lý nếu crawl thành công
+    // Chỉ xử lý nếu crawl thành công, nếu cào lỗi/timeout thì cập nhật trạng thái lỗi
     if (payload.eventType !== 'ACTOR.RUN.SUCCEEDED') {
+        console.warn(`Apify crawl failed/aborted/timed out. Event type: ${payload.eventType}, Source ID: ${source_id}`);
         if (source_id) {
             await supabaseAdmin
                 .from('crawl_sources')
                 .update({ last_crawl_status: 'error' })
                 .eq('id', source_id);
         }
-        return NextResponse.json({ message: 'Bỏ qua vì event không phải là SUCCEEDED' });
+        return NextResponse.json({ message: `Đã cập nhật trạng thái lỗi do event: ${payload.eventType}` });
     }
+
 
     // 1. Lấy thông tin Run ID
     const runId = payload.eventData?.actorRunId;

@@ -56,10 +56,15 @@ export async function POST(request: Request) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://YOUR_NGROK_URL.ngrok.app';
     const webhookUrl = `${baseUrl}/api/crawl/webhook?source_id=${source.id}`;
 
-    // 3. Trigger Apify chạy ngầm và cài đặt Webhook trả về
+    // 3. Trigger Apify chạy ngầm và cài đặt Webhook trả về cho cả thành công và lỗi
     const run = await apifyClient.actor(actorId).start(input, {
         webhooks: [{
-            eventTypes: ['ACTOR.RUN.SUCCEEDED'],
+            eventTypes: [
+              'ACTOR.RUN.SUCCEEDED',
+              'ACTOR.RUN.FAILED',
+              'ACTOR.RUN.ABORTED',
+              'ACTOR.RUN.TIMED_OUT'
+            ],
             requestUrl: webhookUrl,
         }]
     });
